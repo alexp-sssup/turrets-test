@@ -2,23 +2,23 @@
 
 Project guidance for Claude Code sessions in this repository.
 
-## Branching: work directly on `Main`
+## Branching: work directly on `main`
 
-**All work happens directly on the default branch, `Main`.** Do not create a
-per-session branch, and do not open a pull request unless asked to.
+**All work happens directly on the default branch, `main`** (lowercase). Do not
+create a per-session branch, and do not open a pull request unless asked to.
 
-- The default branch is spelled `Main` (capital M), not `main`.
-- At the start of a session: `git fetch origin Main && git checkout Main && git pull origin Main`.
-- Commit your changes on `Main` and push with `git push -u origin Main`.
-- If a session was started on a `claude/...` branch, switch to `Main` before
-  committing (`git checkout -B Main origin/Main`, carrying any work over) and
-  push there instead. This instruction is the standing permission to do so.
-- If a push is rejected because `Main` moved, `git pull --rebase origin Main`
-  and push again. Never force-push `Main`.
+- At the start of a session: `git fetch origin main && git checkout main && git pull origin main`.
+- Commit your changes on `main` and push with `git push -u origin main`.
+- If a session was started on a `claude/...` branch, switch to `main` before
+  committing (`git checkout main && git merge --ff-only <that branch>`, so any
+  work already committed carries over) and push there instead. This instruction
+  is the standing permission to do so.
+- If a push is rejected because `main` moved, `git pull --rebase origin main`
+  and push again. Never force-push `main`.
 
 ## Before you push
 
-Pushing to `Main` publishes straight to the branch CI and Pages build from, so
+Pushing to `main` publishes straight to the branch CI and Pages build from, so
 validate locally first:
 
 ```sh

@@ -82,11 +82,17 @@ export class DamageSystem {
     const verb = this.verbFor(this.ammo.get(impact.load).verb);
     const result = verb.apply(structure, impact);
 
-    let pending = result.detonatedDepots.slice();
+    // Index-based queue rather than shifting the array, so the cascade is a plain
+    // breadth-first walk with no allocation per step.
+    const pending: number[] = [];
+    for (let i = 0; i < result.detonatedDepots.length; i++) {
+      pending.push(result.detonatedDepots[i]);
+    }
     const seen = new Map<number, boolean>();
-    while (pending.length > 0) {
-      const depot = pending[0];
-      pending = pending.slice(1);
+    let head = 0;
+    while (head < pending.length) {
+      const depot = pending[head];
+      head++;
       if (seen.has(depot)) {
         continue;
       }

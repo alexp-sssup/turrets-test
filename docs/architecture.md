@@ -66,8 +66,10 @@ The code is written to be mechanically translatable. Enforced by review, not by 
 1. Classes and interfaces only. No structural typing tricks, no mixins, no decorators.
 2. `enum` for closed sets (maps to `enum class`). No string literal unions in core code.
 3. No `async`/`await`, no generators, no `Promise` in `src/` outside `app/`.
-4. No object/array spread, no destructuring, no optional chaining in core code; explicit
-   field access and explicit `for` loops instead of `map`/`filter`/`reduce`.
+4. No object/array spread, no destructuring, no optional chaining, no `slice`; explicit
+   field access and explicit `for` loops instead of `map`/`filter`/`reduce`. Lambdas appear
+   only as sort comparators and as container iteration callbacks, because those are exactly
+   what they become in C++ (`std::sort` with a comparator, a range-`for` over a map).
 5. Collections are `Array<T>` (`std::vector`) or `Map<number, T>` (`std::unordered_map`
    with an integer key). No string-keyed maps in hot paths.
 6. Nullable references are written `T | null` (maps to `T*` / `std::optional<T>`) and are

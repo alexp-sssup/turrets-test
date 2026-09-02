@@ -33,13 +33,35 @@ export class SimplexOptions {
   /** Reduced costs inside this band count as optimal. */
   public optimalityTolerance: number = 1e-9;
   /** Pivots smaller than this are refused as numerically unsafe. */
-  public pivotTolerance: number = 1e-9;
+  public pivotTolerance: number = 1e-8;
+  /**
+   * Pivots smaller than this fraction of the entering column's largest entry are also
+   * refused. Without a *relative* guard, a column that is numerically a multiple of a
+   * basis column offers a near-zero pivot that looks acceptable in absolute terms, and
+   * taking it leaves the basis singular -- which then shows up as a confidently wrong
+   * answer several thousand iterations later.
+   */
+  public relativePivotTolerance: number = 1e-7;
   /** Ratio-test ties inside this band are broken on pivot magnitude, or by Bland's rule. */
   public ratioTolerance: number = 1e-9;
-  /** Iterations without objective progress before switching to Bland's anti-cycling rule. */
-  public stallLimit: number = 60;
+  /**
+   * Iterations without objective progress before switching to Bland's anti-cycling rule.
+   *
+   * Deliberately large. Bland's rule guarantees termination but prices badly, and a
+   * degenerate program makes long runs of zero-improvement pivots that are real progress
+   * towards the optimum rather than a cycle. Switching after 60 of them tripled the
+   * iteration count on structural models; this is a safety net, not a pricing strategy.
+   */
+  public stallLimit: number = 1000;
   /** Basic values are recomputed from the basis this often, to bound round-off drift. */
   public refreshInterval: number = 100;
+  /**
+   * How many times the basis inverse may be rebuilt from scratch when the answer fails its
+   * own feasibility check. Product-form updates accumulate error over thousands of
+   * iterations; refactorising and re-optimising recovers, and is far cheaper than doing it
+   * on a schedule.
+   */
+  public refactorizationAttempts: number = 3;
 }
 
 class EnteringChoice {
@@ -100,6 +122,13 @@ class SimplexState {
   private readonly duals: Float64Array;
   private readonly column: Float64Array;
   private readonly scratch: Float64Array;
+  /** Nonzeros of the entering column, gathered so the FTRAN loop is O(m * nnz). */
+  private readonly entryRows: Int32Array;
+  private readonly entryValues: Float64Array;
+  private entryCount: number = 0;
+  /** Nonzeros of the pivot row of the basis inverse, gathered for the same reason. */
+  private readonly pivotRowIndex: Int32Array;
+  private pivotRowCount: number = 0;
 
   private iterations: number = 0;
   private readonly maxIterations: number;
@@ -127,6 +156,9 @@ class SimplexState {
     this.duals = new Float64Array(m);
     this.column = new Float64Array(m);
     this.scratch = new Float64Array(m);
+    this.entryRows = new Int32Array(m > 0 ? m : 1);
+    this.entryValues = new Float64Array(m > 0 ? m : 1);
+    this.pivotRowIndex = new Int32Array(m);
 
     const objectiveSign = program.objectiveSense === LpObjectiveSense.Maximize ? -1 : 1;
 
@@ -222,18 +254,30 @@ class SimplexState {
   }
 
   public run(): LpSolution {
-    const phaseOne = this.runPhase(this.phaseOneCost);
-    if (phaseOne === LpStatus.IterationLimit) {
-      return this.buildSolution(LpStatus.IterationLimit);
-    }
-    // Phase one minimises the artificial sum and can never be unbounded (it is bounded
-    // below by zero), so anything but Optimal here is a solver bug.
-    let artificialSum = 0;
+    // A program whose variables all have a finite bound at zero and whose rows are all
+    // homogeneous starts feasible, so there is nothing for phase one to do. The structural
+    // model is exactly that shape, and skipping the phase saves the bulk of the work.
+    let initialResidual = 0;
     for (let i = 0; i < this.rowCount; i++) {
-      artificialSum += this.xValues[this.artificialStart + i];
+      const value = this.xValues[this.artificialStart + i];
+      if (value > initialResidual) {
+        initialResidual = value;
+      }
     }
-    if (artificialSum > this.options.feasibilityTolerance) {
-      return this.buildSolution(LpStatus.Infeasible);
+    if (initialResidual > this.options.feasibilityTolerance) {
+      const phaseOne = this.runPhase(this.phaseOneCost);
+      if (phaseOne === LpStatus.IterationLimit) {
+        return this.buildSolution(LpStatus.IterationLimit);
+      }
+      // Phase one minimises the artificial sum and can never be unbounded (it is bounded
+      // below by zero), so anything but Optimal here is a solver bug.
+      let artificialSum = 0;
+      for (let i = 0; i < this.rowCount; i++) {
+        artificialSum += this.xValues[this.artificialStart + i];
+      }
+      if (artificialSum > this.options.feasibilityTolerance) {
+        return this.buildSolution(LpStatus.Infeasible);
+      }
     }
 
     // Pin the artificials at zero instead of driving them out of the basis: a degenerate
@@ -248,8 +292,130 @@ class SimplexState {
     }
     this.refreshBasicValues();
 
-    const phaseTwo = this.runPhase(this.cost);
+    let phaseTwo = this.runPhase(this.cost);
+
+    // The product-form basis inverse drifts, and a drifted inverse produces drifted duals,
+    // which can make a suboptimal vertex look optimal -- a wrong answer that passes a
+    // primal feasibility check. So an "optimal" verdict is confirmed against a freshly
+    // factorised basis: refactorise, re-optimise, and only believe it when the re-run has
+    // nothing left to do. One O(m^3) factorisation per solve buys that, which is far
+    // cheaper than refactorising on a schedule.
+    for (let attempt = 0; attempt < this.options.refactorizationAttempts; attempt++) {
+      if (phaseTwo !== LpStatus.Optimal) {
+        break;
+      }
+      const before = this.iterations;
+      if (!this.refactorize()) {
+        return this.buildSolution(LpStatus.IterationLimit);
+      }
+      this.refreshBasicValues();
+      phaseTwo = this.runPhase(this.cost);
+      if (this.iterations === before && this.residualNorm() <= this.options.feasibilityTolerance) {
+        break;
+      }
+    }
     return this.buildSolution(phaseTwo);
+  }
+
+  /** Largest row residual of the current point, measured against the raw matrix. */
+  private residualNorm(): number {
+    const m = this.rowCount;
+    for (let i = 0; i < m; i++) {
+      this.scratch[i] = 0;
+    }
+    for (let j = 0; j < this.columnCount; j++) {
+      const value = this.xValues[j];
+      if (value === 0) {
+        continue;
+      }
+      const end = this.colStart[j + 1];
+      for (let p = this.colStart[j]; p < end; p++) {
+        this.scratch[this.colRow[p]] += this.colValue[p] * value;
+      }
+    }
+    let worst = 0;
+    for (let i = 0; i < m; i++) {
+      const magnitude = this.scratch[i] < 0 ? -this.scratch[i] : this.scratch[i];
+      if (magnitude > worst) {
+        worst = magnitude;
+      }
+    }
+    return worst;
+  }
+
+  /**
+   * Rebuilds `B^-1` from the current basis by Gauss-Jordan elimination with partial
+   * pivoting. `O(m^3)`, so it is a repair step and not part of the iteration loop. Returns
+   * false when the basis has become singular, which the caller must treat as a failure
+   * rather than as an answer.
+   */
+  private refactorize(): boolean {
+    const m = this.rowCount;
+    if (m === 0) {
+      return true;
+    }
+    const width = 2 * m;
+    const work = new Float64Array(m * width);
+    for (let k = 0; k < m; k++) {
+      const variable = this.basisVar[k];
+      const end = this.colStart[variable + 1];
+      for (let p = this.colStart[variable]; p < end; p++) {
+        work[this.colRow[p] * width + k] = this.colValue[p];
+      }
+    }
+    for (let i = 0; i < m; i++) {
+      work[i * width + m + i] = 1;
+    }
+    for (let column = 0; column < m; column++) {
+      let pivotRow = -1;
+      let pivotMagnitude = this.options.pivotTolerance;
+      for (let i = column; i < m; i++) {
+        const value = work[i * width + column];
+        const magnitude = value < 0 ? -value : value;
+        if (magnitude > pivotMagnitude) {
+          pivotMagnitude = magnitude;
+          pivotRow = i;
+        }
+      }
+      if (pivotRow < 0) {
+        return false;
+      }
+      if (pivotRow !== column) {
+        const a = column * width;
+        const b = pivotRow * width;
+        for (let j = 0; j < width; j++) {
+          const swap = work[a + j];
+          work[a + j] = work[b + j];
+          work[b + j] = swap;
+        }
+      }
+      const base = column * width;
+      const inversePivot = 1 / work[base + column];
+      for (let j = column; j < width; j++) {
+        work[base + j] *= inversePivot;
+      }
+      for (let i = 0; i < m; i++) {
+        if (i === column) {
+          continue;
+        }
+        const rowBase = i * width;
+        const factor = work[rowBase + column];
+        if (factor === 0) {
+          continue;
+        }
+        for (let j = column; j < width; j++) {
+          work[rowBase + j] -= factor * work[base + j];
+        }
+      }
+    }
+    for (let i = 0; i < m; i++) {
+      const source = i * width + m;
+      const target = i * m;
+      for (let j = 0; j < m; j++) {
+        this.basisInverse[target + j] = work[source + j];
+      }
+    }
+    return true;
   }
 
   private runPhase(costs: Float64Array): LpStatus {
@@ -259,26 +425,38 @@ class SimplexState {
     let stalled = 0;
     let lastObjective = this.evaluateCost(costs);
     let sinceRefresh = 0;
+    this.computeDuals(costs);
 
     for (;;) {
       if (this.iterations >= this.maxIterations) {
         return LpStatus.IterationLimit;
       }
-      this.computeDuals(costs);
       this.chooseEntering(costs, useBland, choice);
       if (choice.variable < 0) {
-        return LpStatus.Optimal;
+        // Confirm optimality against freshly computed duals: an incremental dual vector
+        // that has drifted must not be allowed to declare victory early.
+        this.computeDuals(costs);
+        this.chooseEntering(costs, useBland, choice);
+        if (choice.variable < 0) {
+          return LpStatus.Optimal;
+        }
       }
+      const enteringReducedCost = this.reducedCost(choice.variable, costs);
       this.computeColumn(choice.variable);
       this.ratioTest(choice.variable, choice.direction, useBland, ratio);
       if (ratio.unbounded) {
         return LpStatus.Unbounded;
       }
+      const leavingPosition = ratio.leavingPosition;
       this.applyStep(choice.variable, choice.direction, ratio);
+      if (leavingPosition >= 0) {
+        this.updateDuals(enteringReducedCost, leavingPosition);
+      }
       this.iterations++;
       sinceRefresh++;
       if (sinceRefresh >= this.options.refreshInterval) {
         this.refreshBasicValues();
+        this.computeDuals(costs);
         sinceRefresh = 0;
       }
 
@@ -304,6 +482,29 @@ class SimplexState {
       }
     }
     return sum;
+  }
+
+  /**
+   * Rank-one update of the duals after a pivot: `y' = y + (d_q / alpha_k) * rho`, where
+   * `rho` is the pivot row of the basis inverse *after* scaling. Derived from
+   * Sherman-Morrison on the basis; it replaces an `O(m^2)` recomputation with `O(m)`.
+   *
+   * A full recomputation still runs at every refresh point, so the incremental path cannot
+   * drift away unnoticed.
+   */
+  private updateDuals(reducedCost: number, position: number): void {
+    const m = this.rowCount;
+    const pivotBase = position * m;
+    // The pivot row has already been scaled by 1/alpha_k in updateBasisInverse, so the
+    // reduced cost is applied directly rather than divided again.
+    const step = reducedCost;
+    if (step === 0) {
+      return;
+    }
+    for (let t = 0; t < this.pivotRowCount; t++) {
+      const j = this.pivotRowIndex[t];
+      this.duals[j] += step * this.basisInverse[pivotBase + j];
+    }
   }
 
   /** `y = c_B . B^-1`. */
@@ -385,32 +586,52 @@ class SimplexState {
     }
   }
 
-  /** `alpha = B^-1 A_q`. */
+  /**
+   * `alpha = B^-1 A_q`, gathered over the entering column's nonzeros only.
+   *
+   * A structural column here has a dozen or so entries against thousands of rows, so
+   * touching the whole basis inverse per iteration -- as a textbook dense tableau does --
+   * is where an honest-looking solver quietly becomes unusable.
+   */
   private computeColumn(variable: number): void {
     const m = this.rowCount;
-    for (let i = 0; i < m; i++) {
-      this.scratch[i] = 0;
-    }
+    const start = this.colStart[variable];
     const end = this.colStart[variable + 1];
-    for (let p = this.colStart[variable]; p < end; p++) {
-      this.scratch[this.colRow[p]] = this.colValue[p];
+    let count = 0;
+    for (let p = start; p < end; p++) {
+      this.entryRows[count] = this.colRow[p];
+      this.entryValues[count] = this.colValue[p];
+      count++;
+    }
+    this.entryCount = count;
+    if (count === 0) {
+      for (let i = 0; i < m; i++) {
+        this.column[i] = 0;
+      }
+      return;
     }
     for (let i = 0; i < m; i++) {
-      let sum = 0;
       const rowBase = i * m;
-      for (let k = 0; k < m; k++) {
-        const s = this.scratch[k];
-        if (s !== 0) {
-          sum += this.basisInverse[rowBase + k] * s;
-        }
+      let sum = 0;
+      for (let t = 0; t < count; t++) {
+        sum += this.basisInverse[rowBase + this.entryRows[t]] * this.entryValues[t];
       }
       this.column[i] = sum;
     }
   }
 
   private ratioTest(variable: number, direction: number, useBland: boolean, out: RatioResult): void {
-    const pivotTolerance = this.options.pivotTolerance;
     const ratioTolerance = this.options.ratioTolerance;
+    let largest = 0;
+    for (let k = 0; k < this.rowCount; k++) {
+      const magnitude = this.column[k] < 0 ? -this.column[k] : this.column[k];
+      if (magnitude > largest) {
+        largest = magnitude;
+      }
+    }
+    const relativeFloor = largest * this.options.relativePivotTolerance;
+    const pivotTolerance =
+      this.options.pivotTolerance > relativeFloor ? this.options.pivotTolerance : relativeFloor;
     out.leavingPosition = -1;
     out.leavingToUpper = false;
     out.unbounded = false;
@@ -523,15 +744,29 @@ class SimplexState {
     this.updateBasisInverse(ratio.leavingPosition);
   }
 
-  /** Product-form update of `B^-1` after the column at `position` is replaced. */
+  /**
+   * Product-form update of `B^-1` after the column at `position` is replaced.
+   *
+   * The pivot row's nonzeros are gathered first and only those columns are touched. The
+   * basis inverse starts diagonal and fills in gradually, so early iterations cost a
+   * fraction of the dense `O(m^2)` they would otherwise.
+   */
   private updateBasisInverse(position: number): void {
     const m = this.rowCount;
     const pivot = this.column[position];
     const inversePivot = 1 / pivot;
     const pivotBase = position * m;
+    let nonzeros = 0;
     for (let j = 0; j < m; j++) {
-      this.basisInverse[pivotBase + j] *= inversePivot;
+      const value = this.basisInverse[pivotBase + j];
+      if (value !== 0) {
+        const scaled = value * inversePivot;
+        this.basisInverse[pivotBase + j] = scaled;
+        this.pivotRowIndex[nonzeros] = j;
+        nonzeros++;
+      }
     }
+    this.pivotRowCount = nonzeros;
     for (let i = 0; i < m; i++) {
       if (i === position) {
         continue;
@@ -541,7 +776,8 @@ class SimplexState {
         continue;
       }
       const rowBase = i * m;
-      for (let j = 0; j < m; j++) {
+      for (let t = 0; t < nonzeros; t++) {
+        const j = this.pivotRowIndex[t];
         this.basisInverse[rowBase + j] -= factor * this.basisInverse[pivotBase + j];
       }
     }

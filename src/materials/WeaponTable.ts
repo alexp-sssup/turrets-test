@@ -84,7 +84,7 @@ export class WeaponTable {
         WeaponClassId.Gun,
         "gun",
         MaterialId.Wood,
-        90, // recoil impulse: eighteen wood voxels' worth of weight, so it bites
+        40, // recoil impulse: eight wood voxels' worth of weight, so it bites
         Math.PI / 3, // 60 degree half-angle arc
         40, // range, voxels
         rackCapacity,

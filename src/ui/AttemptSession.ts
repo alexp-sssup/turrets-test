@@ -63,6 +63,7 @@ export class AttemptSession {
   private dryAccumulator: number;
   private noPathAccumulator: number;
   private scrubbing: boolean;
+  private waveHeld: boolean;
 
   public constructor(
     blueprint: Blueprint,
@@ -96,6 +97,7 @@ export class AttemptSession {
     this.dryAccumulator = 0;
     this.noPathAccumulator = 0;
     this.scrubbing = false;
+    this.waveHeld = false;
     // A frame for tick zero, so the Run screen has something to draw before the first
     // step and the Allocate screen can show the design as it will be flown.
     this.captureFrame();
@@ -128,7 +130,35 @@ export class AttemptSession {
 
   /** True when playback has caught up with the solver and is waiting on it. */
   public get stalled(): boolean {
-    return this.startedValue && !this.pausedValue && !this.loop.finished && this.leadSeconds <= 0;
+    return (
+      this.startedValue &&
+      !this.pausedValue &&
+      !this.waveHeld &&
+      !this.loop.finished &&
+      this.leadSeconds <= 0
+    );
+  }
+
+  /**
+   * True once a wave has ended, its repairs are done, and the tester has seen it happen.
+   *
+   * Spec 4.4 makes reassignment inter-wave only, so the run has to actually stop there --
+   * and because the simulation runs ahead of playback it would otherwise have started the
+   * next wave before the tester finished watching the last one. So the loop is held at the
+   * boundary until playback drains to it, and then until the tester says go.
+   */
+  public get atWaveBoundary(): boolean {
+    return this.waveHeld && this.leadSeconds <= 1e-6 && !this.loop.finished;
+  }
+
+  public get held(): boolean {
+    return this.waveHeld;
+  }
+
+  /** Lets the simulation open the next wave. The other half of `atWaveBoundary`. */
+  public resumeNextWave(): void {
+    this.waveHeld = false;
+    this.pausedValue = false;
   }
 
   public get wave(): number {
@@ -231,6 +261,9 @@ export class AttemptSession {
     if (!this.startedValue || this.loop.finished) {
       return;
     }
+    if (this.waveHeld) {
+      return;
+    }
     const deadline = AttemptSession.now() + budgetMs;
     let stepped = 0;
     while (!this.loop.finished) {
@@ -254,6 +287,12 @@ export class AttemptSession {
       }
       this.captureFrame();
       stepped++;
+      if (this.loop.phase === RunPhase.BetweenWaves) {
+        // The wave is over and the repair window has been resolved. Stop here: the tester
+        // is owed the chance to reassign before the next one walks in.
+        this.waveHeld = true;
+        return;
+      }
     }
   }
 

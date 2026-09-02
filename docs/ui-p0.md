@@ -92,6 +92,17 @@ The cost is that a focus-fire click lands at the simulation's leading edge rathe
 the tester is looking at — at most 1.25 s of lag, which is why the lead is one of the numbers
 in the dev readout.
 
+### The run stops between waves
+
+Spec 4.4 makes crew reassignment inter-wave only, so the run has to actually stop at a wave
+boundary -- and because the simulation runs ahead of playback it would otherwise have opened
+the next wave before the tester had finished watching the last one. So `AttemptSession`
+holds the loop at the boundary until playback drains to it, and then until the tester presses
+*next wave*. The Allocate screen appears there with what is left of the crew, and the way out
+of a run you no longer want to fly is *abandon this run*, which records the attempt as flown
+and lost rather than dropping it: "attempts to abandonment" is one of the numbers §7.3 asks
+for.
+
 ### Validation is two-speed
 
 §3.1 wants cost and violations felt *during* layout, and a full validate costs ~70 ms at 49

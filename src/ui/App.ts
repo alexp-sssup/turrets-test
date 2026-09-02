@@ -18,6 +18,7 @@ import { PredictAnalysis, PredictOutcome } from "../render/PredictAnalysis";
 import { OverlayMode, ViewState } from "../render/ViewState";
 import { Projection } from "../render/Projection";
 import { Arena } from "../sim/Arena";
+import { AttemptOutcome } from "../telemetry/AttemptRecord";
 import { BlockStructure } from "../structure/BlockStructure";
 import { RunEvent } from "../sim/RunEvent";
 import { AttemptExport } from "../telemetry/AttemptExport";
@@ -262,6 +263,16 @@ export class App implements SimTarget {
       attempt.simulateAhead(AttemptSession.SIM_BUDGET_MS);
       if (attempt.playedOut) {
         this.finishAttempt();
+      } else if (attempt.atWaveBoundary) {
+        // Spec 4.4: reassignment is inter-wave only, so the loop stops here rather than
+        // rolling into the next wave with last wave's allocation.
+        // `wave` has already advanced to the wave about to be flown, so it is also the
+        // one-based number of the wave that just ended.
+        this.banner =
+          "Wave " +
+          attempt.wave.toString() +
+          " is over and the repair window has been worked. Reassign what is left of the crew.";
+        this.goTo(Screen.Allocate);
       }
     } else if (attempt !== null && this.screen === Screen.Replay) {
       attempt.advancePlayback(dt);
@@ -403,12 +414,19 @@ export class App implements SimTarget {
     }
   }
 
+  /**
+   * "Begin the next wave", whichever wave that is.
+   *
+   * Three cases, and they are all the same command: the first wave of a fresh attempt, the
+   * first wave of the attempt the guided first run pre-opened, and the next wave of a run
+   * held at an inter-wave boundary. A *finished* attempt is never reused -- flying that
+   * again would replay the last attempt's frames while pretending to fly the design the
+   * tester just fixed.
+   */
   public startWave(): void {
     let attempt = this.attempt;
-    // An attempt is reusable only while it has never been started. The one the guided first
-    // run pre-opens qualifies; a finished one does not, and reusing that would replay the
-    // last attempt's frames while pretending to fly the design the tester just fixed.
-    if (attempt === null || attempt.started) {
+    const resuming = attempt !== null && attempt.started && !attempt.finished;
+    if (!resuming && (attempt === null || attempt.started)) {
       this.openAttempt();
       attempt = this.attempt;
     }
@@ -416,7 +434,11 @@ export class App implements SimTarget {
       return;
     }
     attempt.assign(this.repairDetails, this.runners);
-    attempt.start();
+    if (resuming) {
+      attempt.resumeNextWave();
+    } else {
+      attempt.start();
+    }
     this.telemetry.noteRunning(true, App.now());
     this.goTo(Screen.Run);
   }
@@ -474,6 +496,21 @@ export class App implements SimTarget {
       return;
     }
     this.goTo(Screen.Summary);
+  }
+
+  /** Gives up on the run in progress and records it as flown and lost. */
+  private abandonAttempt(): void {
+    const attempt = this.attempt;
+    if (attempt !== null && attempt.started && !attempt.finished) {
+      attempt.writeRecord(this.renderer.renderP95());
+      this.telemetry.finishAttempt(
+        AttemptOutcome.Lost,
+        attempt.record.firstFailedJoint,
+        App.now()
+      );
+    }
+    this.banner = "";
+    this.goTo(Screen.Design);
   }
 
   private openReplayAtFirstFailure(): void {
@@ -594,17 +631,19 @@ export class App implements SimTarget {
       return;
     }
     if (this.screen === Screen.Allocate) {
-      const stations = this.editor.blueprint().countOfKind(BlockKind.Station);
+      const held = this.attempt;
+      const interWave = held !== null && held.started && !held.finished;
+      const blueprint = interWave ? held.blueprint : this.editor.blueprint();
       Dom.setHtml(
         this.panelRoot,
         RunPanels.allocate(
-          this.dials.crewPool,
-          stations,
+          interWave ? (held as AttemptSession).crewAlive : this.dials.crewPool,
+          interWave ? frame.stations.length : blueprint.countOfKind(BlockKind.Station),
           this.dials.crewPerStation,
           this.dials.crewPerRepairDetail,
           this.repairDetails,
           this.runners,
-          false
+          interWave
         )
       );
       return;
@@ -1014,6 +1053,12 @@ export class App implements SimTarget {
     if (action === "design") {
       this.banner = "";
       this.goTo(Screen.Design);
+      return;
+    }
+    if (action === "abandon") {
+      // Leaving a run half-flown is a legitimate thing for a tester to do, and
+      // "attempts to abandonment" is one of the numbers §7.3 wants.
+      this.abandonAttempt();
       return;
     }
     if (action === "allocate") {

@@ -64,7 +64,10 @@ export class OverturningCheck {
       supportCount++;
     }
     if (supportCount === 0) {
-      return 0;
+      // Nothing rests on the ground, so there is no edge to tip about. A structure in that
+      // state is falling, not toppling, and `SupportAnalysis.floatingBlocks` is what says
+      // so -- reporting a zero margin here would double-count it as a tipping failure.
+      return Number.POSITIVE_INFINITY;
     }
 
     // Four edges of the footprint, each described by the axis the body would rotate about

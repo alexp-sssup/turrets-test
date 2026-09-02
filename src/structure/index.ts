@@ -1,4 +1,13 @@
 export { BlockStructure } from "./BlockStructure";
+export {
+  CollapseCause,
+  CollapseEvent,
+  CollapseOutcome,
+  CollapseResolver,
+  collapseCauseName,
+  JointRef,
+} from "./CollapseResolver";
+export { GravityLoadCase, LoadCase } from "./LoadCase";
 export { GROUND_BLOCK, JOINT_COMPONENT_COUNT, Joint, JointComponent } from "./Joint";
 export { JointGraph } from "./JointGraph";
 export { LoadSet } from "./LoadSet";

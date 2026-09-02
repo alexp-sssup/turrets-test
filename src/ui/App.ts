@@ -84,6 +84,7 @@ export class App implements SimTarget {
   private screen: Screen;
   private panelDirty: boolean;
   private lastPanelMs: number;
+  private lastShellMs: number;
   private lastFrameMs: number;
   private dragFrom: IVec3 | null;
   private dragTo: IVec3 | null;
@@ -135,6 +136,7 @@ export class App implements SimTarget {
     this.screen = this.guided ? Screen.Run : Screen.Design;
     this.panelDirty = true;
     this.lastPanelMs = 0;
+    this.lastShellMs = 0;
     this.lastFrameMs = 0;
     this.dragFrom = null;
     this.dragTo = null;
@@ -293,12 +295,19 @@ export class App implements SimTarget {
     // Panels are cheap but not free, and nothing in them changes faster than a tester can
     // read. Ten hertz while a wave is on, on demand otherwise.
     const live = this.screen === Screen.Run || this.screen === Screen.Replay;
-    if (this.panelDirty || (live && now - this.lastPanelMs > 100)) {
+    const dirty = this.panelDirty;
+    if (dirty || (live && now - this.lastPanelMs > 100)) {
       this.renderPanels(frame);
       this.lastPanelMs = now;
       this.panelDirty = false;
     }
-    this.shell.render(this.shellState(frame));
+    // The shell is four numbers and a row of buttons, and none of them changes faster than
+    // a tester can read. Rewriting it every frame would put sixty DOM writes a second next
+    // to a canvas whose whole job is to be measured at sixty frames a second.
+    if (dirty || now - this.lastShellMs > 100) {
+      this.shell.render(this.shellState(frame));
+      this.lastShellMs = now;
+    }
   }
 
   private currentDesign(): FieldDesign {

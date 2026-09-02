@@ -435,9 +435,16 @@ export class App implements SimTarget {
   public startWave(): void {
     let attempt = this.attempt;
     const resuming = attempt !== null && attempt.started && !attempt.finished;
-    if (!resuming && (attempt === null || attempt.started)) {
-      this.openAttempt();
-      attempt = this.attempt;
+    if (!resuming) {
+      // A pre-opened attempt is only good for the design it was opened with. The guided
+      // first run opens one before the tester has touched anything, and if they visit the
+      // editor first, that attempt is a stale copy of the blueprint they just changed.
+      const stale =
+        attempt === null || attempt.started || attempt.blueprint !== this.editor.blueprint();
+      if (stale) {
+        this.openAttempt();
+        attempt = this.attempt;
+      }
     }
     if (attempt === null) {
       return;
@@ -1009,8 +1016,9 @@ export class App implements SimTarget {
 
   private onFieldInput(name: string, value: string): void {
     if (name === "name") {
+      // Deliberately does not mark the panel dirty: rebuilding it would replace the input
+      // the tester is typing into. Nothing else on screen shows the name.
       this.editor.rename(value);
-      this.panelDirty = false;
       return;
     }
     if (name === "import") {

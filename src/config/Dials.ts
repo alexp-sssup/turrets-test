@@ -32,6 +32,14 @@ export class Dials {
   public readonly repairSecondsPerVoxel: number;
   /** Seconds a crew member spends loading at a depot or rack. */
   public readonly handlingSeconds: number;
+  /**
+   * How often the run loop re-checks structural soundness when nothing has changed.
+   *
+   * A solve is expensive (see docs/structural-solver.md), so the loop also re-checks
+   * immediately whenever the structure or the recoil loading changes -- this interval only
+   * bounds how stale a quiet frame's answer can be.
+   */
+  public readonly structuralIntervalSeconds: number;
 
   public constructor(
     materialBudget: number,
@@ -50,7 +58,8 @@ export class Dials {
     voxelSize: number,
     predictiveThreshold: number,
     repairSecondsPerVoxel: number,
-    handlingSeconds: number
+    handlingSeconds: number,
+    structuralIntervalSeconds: number
   ) {
     this.materialBudget = materialBudget;
     this.crewPool = crewPool;
@@ -69,6 +78,7 @@ export class Dials {
     this.predictiveThreshold = predictiveThreshold;
     this.repairSecondsPerVoxel = repairSecondsPerVoxel;
     this.handlingSeconds = handlingSeconds;
+    this.structuralIntervalSeconds = structuralIntervalSeconds;
   }
 
   /** The P0 values from spec 5. */
@@ -90,7 +100,8 @@ export class Dials {
       1, // voxel size
       0.85, // predictive highlight threshold
       2, // repair seconds per voxel
-      1 // handling seconds at a rack or depot
+      1, // handling seconds at a rack or depot
+      3 // structural re-check interval, seconds
     );
   }
 }

@@ -41,10 +41,10 @@ describe("BlueprintValidator: the standard turret", () => {
     assert.equal(report.remainingBudget, 407);
   });
 
-  it("gives the station the readout spec 4.3 makes mandatory", () => {
-    assert.equal(report.stationReadouts.length, 1);
+  it("gives every station the readout spec 4.3 makes mandatory", () => {
+    assert.equal(report.stationReadouts.length, 2, "two stations cover the two approaches");
     const station: StationReadout = report.stationReadouts[0];
-    assert.ok(station.position.equals(new IVec3(2, 1, 0)));
+    assert.ok(station.position.equals(new IVec3(1, 1, 0)));
 
     // A clear line down the lane, and most of the arc with it.
     assert.equal(station.arcCentreClear, true);
@@ -83,7 +83,7 @@ describe("BlueprintValidator: designs that should not pass", () => {
     assert.equal(report.isValid, false);
     assert.equal(report.has(ViolationKind.StationArcBlocked), true);
     assert.equal(report.countOf(ViolationKind.StationArcBlocked), 1, "only the buried one");
-    assert.equal(report.stationReadouts.length, 2);
+    assert.equal(report.stationReadouts.length, 3);
   });
 
   it("flags a station with no route to a depot", () => {

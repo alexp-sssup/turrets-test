@@ -21,9 +21,16 @@ export class SampleBlueprints {
   }
 
   /**
-   * A sound, valid, affordable turret: stone floor, wood walls, one station facing the
-   * lane, one depot, one hatch, one core. 43 blocks and 93 of the 500 material budget, so
-   * there is plenty of room for a player to make it worse.
+   * A sound, valid, affordable turret: stone floor, wood walls, two stations covering the
+   * lane, two dispersed depots, a hatch at the back, and the core sunk into the stone floor
+   * where a flat trajectory cannot reach it. 43 blocks and 93 of the 500 material budget,
+   * so there is plenty of room for a player to make it worse.
+   *
+   * The core's placement is the fixture's one piece of real design. An earlier version put
+   * it at wall height directly behind the middle station, and three light kinetic rounds
+   * ended the run in wave one: the first two killed the station and the third carried
+   * through the gap into the core. Sinking it into the floor is the fix a player would
+   * arrive at, and it is the sort of thing P0 exists to surface.
    */
   public static standardTurret(): Blueprint {
     const builder = new BlueprintBuilder();
@@ -34,11 +41,13 @@ export class SampleBlueprints {
       BlockKind.Structural,
       Direction.PosZ
     );
+    builder.place(new IVec3(2, 0, 2), MaterialId.Stone, BlockKind.Core, Direction.PosZ);
     SampleBlueprints.addWalls(builder);
-    builder.place(new IVec3(2, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
+    builder.place(new IVec3(1, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
+    builder.place(new IVec3(3, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
     builder.place(new IVec3(2, 1, 4), MaterialId.Wood, BlockKind.Hatch, Direction.PosZ);
     builder.place(new IVec3(1, 1, 1), MaterialId.Wood, BlockKind.Depot, Direction.PosZ);
-    builder.place(new IVec3(2, 1, 2), MaterialId.Wood, BlockKind.Core, Direction.PosZ);
+    builder.place(new IVec3(3, 1, 3), MaterialId.Wood, BlockKind.Depot, Direction.PosZ);
     return builder.build("standard turret");
   }
 
@@ -48,7 +57,7 @@ export class SampleBlueprints {
    */
   public static buriedStationTurret(): Blueprint {
     const builder = BlueprintBuilder.fromBlueprint(SampleBlueprints.standardTurret());
-    builder.place(new IVec3(2, 1, 1), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
+    builder.place(new IVec3(1, 1, 1), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
     return builder.build("buried station");
   }
 
@@ -65,7 +74,7 @@ export class SampleBlueprints {
     SampleBlueprints.addWalls(builder);
     builder.place(new IVec3(2, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
     builder.place(new IVec3(2, 1, 4), MaterialId.Wood, BlockKind.Hatch, Direction.PosZ);
-    builder.place(new IVec3(2, 1, 2), MaterialId.Wood, BlockKind.Core, Direction.PosZ);
+    builder.place(new IVec3(2, 0, 2), MaterialId.Stone, BlockKind.Core, Direction.PosZ);
     // A depot in its own sealed cell in the corner, walled in on both open sides.
     builder.place(new IVec3(3, 1, 3), MaterialId.Wood, BlockKind.Depot, Direction.PosZ);
     builder.place(new IVec3(2, 1, 3), MaterialId.Wood, BlockKind.Structural, Direction.PosZ);

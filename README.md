@@ -21,7 +21,12 @@ without a renderer:
 npm install
 npm test          # builds, then runs the node:test suite
 npm run demo      # runs a scripted five-wave run and prints the report
+npm run site      # builds the static site published to GitHub Pages
 ```
+
+The site is the docs plus a live run of the harness, redeployed by
+`.github/workflows/pages.yml` on every push to the default
+branch. It needs Pages set to "GitHub Actions" as its source once, under Settings -> Pages.
 
 `npm run demo` walks all three questions: it validates the sample designs and prints the
 heatmap, runs the five-wave script and prints the replay, and shows the same script telling

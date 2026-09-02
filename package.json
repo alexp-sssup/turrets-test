@@ -9,13 +9,15 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist dist-site",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
-    "demo": "npm run build && node dist/src/app/main.js"
+    "demo": "npm run build && node dist/src/app/main.js",
+    "site": "npm run build && node scripts/build-site.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
+    "marked": "^18.0.11",
     "typescript": "~5.9.3"
   }
 }

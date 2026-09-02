@@ -474,10 +474,14 @@ export class RunPanels {
       "</table>" +
       '<p class="hint">a station with no spare runner sends its own gunner for ammunition, ' +
       "and the gun is silent for the whole round trip. that is the baseline penalty.</p>" +
-      '<div class="button-row"><button data-action="design">← editor</button>' +
+      '<div class="button-row"><button data-action="' +
+      (interWave ? "abandon" : "design") +
+      '">' +
+      (interWave ? "abandon this run" : "← editor") +
+      "</button></div>" +
       '<button class="primary" data-action="start">' +
       (interWave ? "next wave →" : "start wave 1 →") +
-      "</button></div></section>"
+      "</button></section>"
     );
   }
 }

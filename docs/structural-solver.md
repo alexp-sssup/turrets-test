@@ -193,6 +193,12 @@ Named, because the point of P0 is to know what it did not answer:
 * Loads are applied at block centres, so recoil produces a moment about a *joint* through
   the lever arm, but never about the station block's own centre.
 * A mixed-material joint takes the weaker of the two capacities on every axis, which is why
-  a wood arm bolted to a stone wall inherits stone's zero tension.
+  a wood arm bolted to a stone wall inherits stone's zero tension. A consequence worth
+  knowing about: **a wood column standing on a stone floor is a hinge.** Its interface has
+  no tension, so its bending capacity is proportional to the compression already on it,
+  which scales with the load -- so like tipping it becomes a hard boundary rather than a
+  graded margin, and the diagnosis is `Unsupportable` with no joint to point at. That is
+  arguably the right physics for stacked masonry, but it means mixed-material load paths
+  need a wider section where a single-material one would not.
 * Centre of mass and total mass are computed and exposed even though P0 has no mobility,
   because P1's platforms read them rather than introducing them (spec §6).

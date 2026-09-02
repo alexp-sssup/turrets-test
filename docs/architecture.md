@@ -18,7 +18,7 @@ src/
   crew/         Fixed crew pool, assignment layer, repair details, runners.
   sim/          Attacker controller interface, scripted waves, run loop, replay recorder.
   persistence/  Blueprint library that survives between runs.
-  app/          Headless CLI harness.
+  app/          Headless CLI harness. The only file I/O and the only console output.
 ```
 
 Dependencies point strictly downward in that list; `math/lp` knows nothing about voxels

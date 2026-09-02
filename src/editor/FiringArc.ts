@@ -11,8 +11,13 @@ import { BlockStructure } from "../structure/BlockStructure";
  * had to say so.
  *
  * Sampling is a fan of rays in the horizontal plane, since P0's lane is horizontal. Rays
- * are walked one voxel at a time, which is coarse but exact on the grid the game is played
- * on -- and cheap enough to re-run on every edit.
+ * are walked one voxel at a time and rounded to the nearest cell, which is cheap enough to
+ * re-run on every edit but deliberately coarse: an angled ray leaving a wall port steps
+ * clear of the wall's own line on its first move, so a station set into an outer wall
+ * reports its full arc rather than being docked for its neighbours. That is the right answer
+ * for the case P0 cares about -- a gun with nothing in front of it versus a gun buried
+ * behind another one, which reports 0% -- and a grazing obstruction two voxels out would
+ * need a proper voxel traversal instead.
  */
 export class FiringArc {
   /** Rays cast across the arc, odd so that one of them is the centre line. */

@@ -12,6 +12,13 @@ npm run preview    # serve the built output
 The build is published to GitHub Pages by `.github/workflows/pages.yml` on every push to the
 development branch, after typecheck, the boundary check and the headless test suite all pass.
 
+**Pages needs enabling once, by a repository admin:** Settings → Pages → Source: *GitHub
+Actions*. The workflow token cannot do it itself -- `configure-pages` with `enablement: true`
+comes back "Resource not accessible by integration" -- so until somebody flips that switch the
+build job fails at `configure-pages` with a message saying exactly that. If the `github-pages`
+environment is also restricted to the default branch, either add this branch to its allowed
+list or merge first; the deploy job reports that separately.
+
 ## What the tester sees
 
 The first session opens **mid-loop**, not in the editor (§7.2): a deliberately flawed worked

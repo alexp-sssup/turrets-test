@@ -33,9 +33,10 @@ npm run build:web  # typecheck + boundary check + static files into dist-web/
 The tester build is four screens and a persistent shell -- design, allocate, run, replay --
 over a side-on 2D cross-section of the same simulation the harness runs. It is static files
 behind one URL, published to GitHub Pages from
-[`.github/workflows/pages.yml`](.github/workflows/pages.yml). See
-[docs/ui-p0.md](docs/ui-p0.md) for what it does and which of the spec's decisions it
-argues with.
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml); Pages has to be switched on
+once under Settings -> Pages -> Source: GitHub Actions, which a workflow token is not allowed
+to do for you. See [docs/ui-p0.md](docs/ui-p0.md) for what the build does and which of the
+spec's decisions it argues with.
 
 `npm run demo` walks all three questions: it validates the sample designs and prints the
 heatmap, runs the five-wave script and prints the replay, and shows the same script telling

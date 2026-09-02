@@ -47,12 +47,11 @@ jobs:
       - name: Build the static site
         run: npx vite build
 
-      # `enablement` turns Pages on the first time this runs, so the deploy needs no manual
-      # setup step. If the account restricts it, this fails with a clear message and the
-      # switch is Settings -> Pages -> Source: GitHub Actions.
+      # One-time setup, by a repository admin: Settings -> Pages -> Source: GitHub Actions.
+      # The workflow token cannot do it (`enablement: true` fails with "Resource not
+      # accessible by integration"), and until it is done this step fails with a message
+      # saying so. Nothing else about the workflow needs touching.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

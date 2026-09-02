@@ -36,6 +36,26 @@ export class BlueprintCodec {
     return JSON.stringify(payload);
   }
 
+  /**
+   * A short stable fingerprint of a design.
+   *
+   * Attempt records name the blueprint they were flown with, and "did the tester change
+   * the design after the replay" (UI spec 7.3 -- the single most important number in the
+   * build) is answered by comparing two of these. FNV-1a over the canonical encoding, so
+   * two blueprints hash the same exactly when they encode the same.
+   */
+  public static hash(blueprint: Blueprint): string {
+    const text = BlueprintCodec.encode(blueprint);
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+      hash = hash ^ text.charCodeAt(i);
+      // 16777619, as shifts, so the arithmetic stays in 32-bit integer range.
+      hash = (hash + (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)) | 0;
+    }
+    const unsigned = hash < 0 ? hash + 4294967296 : hash;
+    return unsigned.toString(16).padStart(8, "0");
+  }
+
   public static decode(text: string): Blueprint {
     const payload = JSON.parse(text) as { version: number; name: string; blocks: number[] };
     if (payload.version !== BLUEPRINT_FORMAT_VERSION) {

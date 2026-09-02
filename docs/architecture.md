@@ -1,9 +1,12 @@
 # Architecture
 
-The P0 build is a **headless deterministic simulation core** plus a CLI harness. There is
-no renderer: every claim in the spec (§1) is observable through data -- the heatmap is a
-per-joint utilization array, the replay is an event log, the editor is a validator that
-returns violations.
+The P0 build is a **headless deterministic simulation core**, a CLI harness, and a browser
+tester build layered on top of both.
+
+The core is the part that matters: every claim in the spec (§1) is observable through data
+alone -- the heatmap is a per-joint utilization array, the replay is an event log, the editor
+is a validator that returns violations -- so it can be tested, batch-run and translated
+without a renderer ever existing. See [ui-p0.md](ui-p0.md) for the build that draws it.
 
 ```
 src/
@@ -19,6 +22,11 @@ src/
   sim/          Attacker controller interface, scripted waves, run loop, replay recorder.
   persistence/  Blueprint library that survives between runs.
   app/          Headless CLI harness. The only file I/O and the only console output.
+
+  render/       Canvas layers, the frame snapshot, predictive analysis. Browser only.
+  ui/           DOM panels, the input dispatcher, the screens. Browser only.
+  telemetry/    Per-attempt metrics and the export format. No I/O, no clock of its own.
+  data/         dials.json and the worked examples.
 ```
 
 Dependencies point strictly downward in that list; `math/lp` knows nothing about voxels
@@ -44,6 +52,19 @@ See [structural-solver.md](structural-solver.md). Short version: rigid voxel blo
 deformable joints, static equilibrium as a linear program, objective = maximise the
 collapse load factor. The optimum is a single legible number (`loadFactor`) and a
 per-joint utilization field (the heatmap).
+
+## The one hard boundary
+
+`core`, `math`, `materials`, `blueprint`, `structure`, `path`, `editor`, `damage`, `crew`,
+`sim`, `config` and `persistence` contain no DOM reference and no wall clock -- not
+`document`, not `performance.now`, not `Date.now`. `scripts/check-boundary.mjs` enforces it
+and CI runs it, because determinism (spec 4.5) is what makes the replay an input log rather
+than a state capture, and because collected tester blueprints have to be batch-runnable
+without a browser. The same check refuses a renderer that mutates simulation state.
+
+`render/`, `ui/` and `telemetry/` are browser-side and **exempt from the C++ translation
+rules below**: they will not be translated, since a shipping engine brings its own renderer.
+They still follow the surrounding naming and comment conventions.
 
 ## Determinism
 

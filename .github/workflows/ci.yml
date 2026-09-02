@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # UI spec 5.1: sim/ and solver/ contain no DOM reference of any kind and run
+      # headless. Enforced here rather than by convention, because a single
+      # `performance.now()` in the tick would break both determinism and the ability to
+      # batch-run collected tester blueprints without a browser.
+      - name: Check the headless boundary
+        run: npm run check:boundary
+
+      # The suite includes the determinism check: a canned attempt replays to an identical
+      # final state hash headlessly (spec 4.5).
+      - name: Test
+        run: npm test
+
+      - name: Build the static site
+        run: npx vite build

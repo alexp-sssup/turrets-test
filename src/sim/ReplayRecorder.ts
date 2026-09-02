@@ -9,6 +9,25 @@ export enum InputKind {
   ClearFocus = 1,
   /** Switching a station's load between waves. */
   SelectLoad = 2,
+  /**
+   * Spec 4.4's allocation decision: how many repair details and runners the player wants.
+   * `value` is repair details, `secondary` is runners; gunners are the remainder, because
+   * a station with no gunner is not a decision anybody makes on purpose.
+   */
+  SetAllocation = 3,
+}
+
+export function inputKindName(kind: InputKind): string {
+  if (kind === InputKind.FocusTarget) {
+    return "focus target";
+  }
+  if (kind === InputKind.ClearFocus) {
+    return "clear focus";
+  }
+  if (kind === InputKind.SelectLoad) {
+    return "select load";
+  }
+  return "set allocation";
 }
 
 export class ReplayInput {
@@ -131,6 +150,19 @@ export class ReplayRecorder {
 
   public get eventCount(): number {
     return this.events.length;
+  }
+
+  /**
+   * The log as it stands mid-run. The replay timeline reads this incrementally while the
+   * attempt is still being played, so "the replay can never show something the metrics
+   * missed" holds during the run and not just after it.
+   */
+  public eventsSoFar(): readonly RunEvent[] {
+    return this.events;
+  }
+
+  public get firstFailedJointSoFar(): JointRef | null {
+    return this.firstFailed;
   }
 
   public build(seed: number, blueprintName: string): Replay {

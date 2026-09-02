@@ -1,0 +1,222 @@
+import { Blueprint } from "../blueprint/Blueprint";
+import { BlueprintCodec } from "../persistence/BlueprintCodec";
+import { JointRef } from "../structure/CollapseResolver";
+import { OverlayMode } from "../render/ViewState";
+import { AttemptOutcome, AttemptRecord } from "./AttemptRecord";
+import { DesignMetrics } from "./DesignMetrics";
+
+/** What a session can tell you across attempts, which is where §1.2 lives. */
+export class SessionSummary {
+  public readonly attempts: number;
+  public readonly flown: number;
+  /** Attempts taken before the first surviving run, or -1 when there has not been one. */
+  public readonly attemptsToFirstSurvival: number;
+  /** Attempts on the current design lineage since the last survival. */
+  public readonly attemptsSinceSurvival: number;
+  /** How many times the tester edited the blueprint after watching a replay. */
+  public readonly fixesAfterReplay: number;
+  /** Of those, how many broke in the same place again. */
+  public readonly repeatedFailures: number;
+
+  public constructor(
+    attempts: number,
+    flown: number,
+    attemptsToFirstSurvival: number,
+    attemptsSinceSurvival: number,
+    fixesAfterReplay: number,
+    repeatedFailures: number
+  ) {
+    this.attempts = attempts;
+    this.flown = flown;
+    this.attemptsToFirstSurvival = attemptsToFirstSurvival;
+    this.attemptsSinceSurvival = attemptsSinceSurvival;
+    this.fixesAfterReplay = fixesAfterReplay;
+    this.repeatedFailures = repeatedFailures;
+  }
+}
+
+/**
+ * The session: an id, a list of attempts, and the bookkeeping that turns what a tester did
+ * into the numbers in UI spec 7.3.
+ *
+ * Deliberately free of I/O and of any clock. Wall-clock times arrive as arguments, and
+ * persistence is somebody else's job (`TelemetryStore`), so the whole of this can be tested
+ * headlessly -- which matters, because a metric that is silently never recorded is worse
+ * than no metric at all.
+ *
+ * Note what is *not* here: the note box of UI spec 7.4. It was cut from this build on
+ * request, so nothing collects free text and the export carries none.
+ */
+export class Telemetry {
+  public readonly sessionId: string;
+  private readonly attemptList: AttemptRecord[];
+  private currentAttempt: AttemptRecord | null;
+  private overlay: OverlayMode;
+  private overlaySinceMs: number;
+  private running: boolean;
+  private replayWatchedAtMs: number;
+  private lastFirstFailedJoint: JointRef | null;
+  private lastReplayWasOpened: boolean;
+
+  public constructor(sessionId: string) {
+    this.sessionId = sessionId;
+    this.attemptList = [];
+    this.currentAttempt = null;
+    this.overlay = OverlayMode.Material;
+    // -1 rather than 0: a clock that legitimately starts at zero must not be mistaken for
+    // an unset one, or the first interval of every session goes uncharged.
+    this.overlaySinceMs = -1;
+    this.running = false;
+    this.replayWatchedAtMs = 0;
+    this.lastFirstFailedJoint = null;
+    this.lastReplayWasOpened = false;
+  }
+
+  public get attempts(): readonly AttemptRecord[] {
+    return this.attemptList;
+  }
+
+  public get current(): AttemptRecord | null {
+    return this.currentAttempt;
+  }
+
+  public get attemptCount(): number {
+    return this.attemptList.length;
+  }
+
+  /**
+   * Opens a record for an attempt about to be flown.
+   *
+   * The previous attempt's first failed joint is carried across here, because the field
+   * that matters most -- did the fix work, or did the same joint go again -- is a
+   * comparison between consecutive attempts and nothing else in the build remembers it.
+   */
+  public beginAttempt(blueprint: Blueprint, cost: number, seed: number, nowMs: number): AttemptRecord {
+    const record = new AttemptRecord(
+      this.sessionId,
+      this.attemptList.length,
+      blueprint.name,
+      BlueprintCodec.hash(blueprint),
+      BlueprintCodec.encode(blueprint),
+      seed,
+      [],
+      [],
+      DesignMetrics.of(blueprint, cost)
+    );
+    record.previousFirstFailedJoint = this.lastFirstFailedJoint;
+    record.editedAfterReplay = this.lastReplayWasOpened;
+    record.cellCount = blueprint.blockCount;
+    this.attemptList.push(record);
+    this.currentAttempt = record;
+    this.overlaySinceMs = nowMs;
+    this.lastReplayWasOpened = false;
+    return record;
+  }
+
+  /** Closes the current attempt, and remembers what broke so the next one can be compared. */
+  public finishAttempt(outcome: AttemptOutcome, firstFailedJoint: JointRef | null, nowMs: number): void {
+    const record = this.currentAttempt;
+    if (record === null) {
+      return;
+    }
+    this.chargeOverlayDwell(nowMs);
+    record.outcome = outcome;
+    record.firstFailedJoint = firstFailedJoint;
+    if (firstFailedJoint !== null) {
+      this.lastFirstFailedJoint = firstFailedJoint;
+    }
+    this.running = false;
+  }
+
+  /** Charges dwell to the outgoing overlay and starts the clock on the incoming one. */
+  public noteOverlay(overlay: OverlayMode, nowMs: number): void {
+    this.chargeOverlayDwell(nowMs);
+    this.overlay = overlay;
+    if (this.running && overlay === OverlayMode.Predict && this.currentAttempt !== null) {
+      // §4: "predict is live during a run". Whether testers actually use it there is the
+      // difference between an overlay that anticipates and one that only explains.
+      this.currentAttempt.predictOpenedDuringRun = true;
+    }
+  }
+
+  public noteRunning(running: boolean, nowMs: number): void {
+    this.chargeOverlayDwell(nowMs);
+    this.running = running;
+  }
+
+  public noteReplayOpened(nowMs: number): void {
+    const record = this.currentAttempt;
+    if (record === null) {
+      return;
+    }
+    record.replayOpened = true;
+    this.lastReplayWasOpened = true;
+    this.replayWatchedAtMs = nowMs;
+  }
+
+  /** Scrubbing counts: how hard the tester had to work to find the moment. */
+  public noteScrub(watchedFraction: number): void {
+    const record = this.currentAttempt;
+    if (record === null) {
+      return;
+    }
+    record.replayScrubCount++;
+    if (watchedFraction > record.replayWatchFraction) {
+      record.replayWatchFraction = watchedFraction;
+    }
+  }
+
+  public noteReplayProgress(watchedFraction: number): void {
+    const record = this.currentAttempt;
+    if (record === null) {
+      return;
+    }
+    if (watchedFraction > record.replayWatchFraction) {
+      record.replayWatchFraction = watchedFraction;
+    }
+  }
+
+  public summary(): SessionSummary {
+    let flown = 0;
+    let toFirstSurvival = -1;
+    let sinceSurvival = 0;
+    let fixes = 0;
+    let repeats = 0;
+    for (let i = 0; i < this.attemptList.length; i++) {
+      const record = this.attemptList[i];
+      if (record.outcome !== AttemptOutcome.NotFlown) {
+        flown++;
+      }
+      if (record.survived) {
+        if (toFirstSurvival < 0) {
+          toFirstSurvival = i + 1;
+        }
+        sinceSurvival = 0;
+      } else {
+        sinceSurvival++;
+      }
+      if (record.editedAfterReplay) {
+        fixes++;
+        if (record.sameJointFailedAgain) {
+          repeats++;
+        }
+      }
+    }
+    return new SessionSummary(
+      this.attemptList.length,
+      flown,
+      toFirstSurvival,
+      sinceSurvival,
+      fixes,
+      repeats
+    );
+  }
+
+  private chargeOverlayDwell(nowMs: number): void {
+    const record = this.currentAttempt;
+    if (record !== null && this.overlaySinceMs >= 0 && nowMs > this.overlaySinceMs) {
+      record.overlayDwell.add(this.overlay, (nowMs - this.overlaySinceMs) / 1000, this.running);
+    }
+    this.overlaySinceMs = nowMs;
+  }
+}

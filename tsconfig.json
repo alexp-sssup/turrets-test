@@ -1,10 +1,12 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
     "module": "commonjs",
     "moduleResolution": "node",
     "outDir": "dist",
     "rootDir": ".",
+    "resolveJsonModule": true,
     "strict": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,

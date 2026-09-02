@@ -1,0 +1,64 @@
+name: Deploy the tester build to GitHub Pages
+
+# UI spec 7.1: one URL, no install, no account, no build step for the tester. The build is
+# static files, so Pages is the whole of the hosting requirement.
+on:
+  push:
+    branches:
+      - main
+      - claude/prototype-ui-github-pages-q1cw01
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one in flight: a half-published site is worse
+# than a stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The three gates the spec asks for, before anything is published:
+      # types, the sim/solver boundary (spec 5.1), and the headless test suite.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Check the headless boundary
+        run: npm run check:boundary
+
+      - name: Test
+        run: npm test
+
+      - name: Build the static site
+        run: npx vite build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

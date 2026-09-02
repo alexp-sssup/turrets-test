@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - main
-      - claude/prototype-ui-github-pages-q1cw01
   workflow_dispatch:
 
 permissions:

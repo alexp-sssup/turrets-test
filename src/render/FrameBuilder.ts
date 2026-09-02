@@ -243,11 +243,11 @@ export class FrameBuilder {
       const starved = supply !== null && supply.starved;
       const fired = FrameBuilder.contains(loop.firingThisTick, block);
       let status: StationStatus;
-      if (loop.phase === RunPhase.Ready) {
-        // Before the first wave the racks have not been filled yet -- that happens in the
-        // resupply window when the wave opens -- so an empty rack here says nothing about
-        // the design, and shouting DRY at a tester who has not pressed start would be a
-        // lie about their blueprint.
+      if (loop.phase === RunPhase.Ready || loop.phase === RunPhase.BetweenWaves) {
+        // No wave is on the lane, and the racks are filled by the resupply window when one
+        // opens -- so between waves an empty rack says nothing about the design. Shouting
+        // DRY at a tester who is choosing their next allocation, or who has not pressed
+        // start at all, would be a lie about their blueprint.
         status = StationStatus.Reloading;
       } else if (starved) {
         status = StationStatus.NoPath;

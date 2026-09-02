@@ -1,3 +1,4 @@
+import { InputSource } from "./InputSource";
 import { InputKind, ReplayInput } from "./ReplayRecorder";
 
 /**
@@ -7,7 +8,7 @@ import { InputKind, ReplayInput } from "./ReplayRecorder";
  * a replay stores (spec 4.5). Feeding a replay's inputs back in re-drives the run, and that
  * is the only mechanism needed for "watch the replay".
  */
-export class InputScript {
+export class InputScript implements InputSource {
   private readonly inputs: readonly ReplayInput[];
   private cursor: number;
 

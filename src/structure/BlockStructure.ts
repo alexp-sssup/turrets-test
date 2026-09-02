@@ -214,6 +214,27 @@ export class BlockStructure {
     return this.jointFactors.size;
   }
 
+  /**
+   * A deep copy of the runtime state, sharing the immutable design.
+   *
+   * This is what makes "what collapses if this block dies" answerable without breaking
+   * the run: the predictive overlay destroys a block on a copy, resolves the collapse on
+   * the copy, and throws it away. Live state is never speculatively mutated.
+   */
+  public clone(): BlockStructure {
+    const copy = new BlockStructure(this.design);
+    for (let i = 0; i < this.positions.length; i++) {
+      copy.aliveFlags[i] = this.aliveFlags[i];
+      copy.damageTaken[i] = this.damageTaken[i];
+    }
+    this.jointFactors.forEach((factor: number, key: number): void => {
+      copy.jointFactors.set(key, factor);
+    });
+    copy.aliveCountValue = this.aliveCountValue;
+    copy.versionValue = this.versionValue;
+    return copy;
+  }
+
   /** Live blocks of a kind, in canonical index order. */
   public aliveOfKind(kind: BlockKind): number[] {
     const result: number[] = [];

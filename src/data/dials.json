@@ -1,0 +1,21 @@
+{
+  "comment": "Every tunable number in P0 (prototype spec 5). Testers report on feel; this file is what you change between attempts. A test asserts it agrees with Dials.defaults() field for field, so the headless harness and the browser build can never drift apart.",
+  "materialBudget": 500,
+  "crewPool": 12,
+  "crewPerStation": 1,
+  "crewPerRepairDetail": 2,
+  "waveCount": 5,
+  "interWaveWindowSeconds": 30,
+  "crewCarryCapacity": 12,
+  "stationRackCapacity": 9,
+  "rackRefillThreshold": 3,
+  "crewWalkSpeed": 2,
+  "depotCapacity": 240,
+  "tickSeconds": 0.05,
+  "gravity": 10,
+  "voxelSize": 1,
+  "predictiveThreshold": 0.85,
+  "repairSecondsPerVoxel": 2,
+  "handlingSeconds": 1,
+  "structuralIntervalSeconds": 3
+}

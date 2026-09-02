@@ -9,13 +9,18 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist dist-web",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
-    "demo": "npm run build && node dist/src/app/main.js"
+    "demo": "npm run build && node dist/src/app/main.js",
+    "check:boundary": "node scripts/check-boundary.mjs",
+    "dev": "vite",
+    "build:web": "npm run typecheck && npm run check:boundary && vite build",
+    "preview": "vite preview --port 4173"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vite": "^7.3.6"
   }
 }

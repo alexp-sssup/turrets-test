@@ -13,8 +13,10 @@ import { BlockStructure } from "../structure/BlockStructure";
 import { GravityLoadCase } from "../structure/LoadCase";
 import { StructuralStatus } from "../structure/StructuralReport";
 import { StructuralSolver } from "../structure/StructuralSolver";
+import { SupportAnalysis } from "../structure/SupportAnalysis";
 import { SupportSurface } from "../structure/SupportSurface";
 import { FiringArc } from "./FiringArc";
+import { GeometryReport } from "./GeometryReport";
 import { StationReadout } from "./StationReadout";
 import { ValidationReport } from "./ValidationReport";
 import { Violation, ViolationKind } from "./Violation";
@@ -71,16 +73,7 @@ export class BlueprintValidator {
     const violations: Violation[] = [];
     const cost = blueprint.totalCost(this.materials);
     const allowance = budget.materialBudget();
-    if (cost > allowance) {
-      violations.push(
-        new Violation(
-          ViolationKind.OverBudget,
-          -1,
-          cost.toString() + " of " + allowance.toString() + " material"
-        )
-      );
-    }
-
+    this.checkBudget(cost, allowance, violations);
     this.checkRequiredBlocks(blueprint, violations);
 
     const structure = new BlockStructure(blueprint);
@@ -88,20 +81,12 @@ export class BlueprintValidator {
     const loadCase = new GravityLoadCase(this.materials, this.dials);
     const structural = this.solver.analyse(structure, joints, loadCase.build(structure));
 
-    if (structural.floatingBlocks.length > 0) {
-      violations.push(
-        new Violation(
-          ViolationKind.DisconnectedBlocks,
-          structural.floatingBlocks[0],
-          structural.floatingBlocks.length.toString() + " block(s) with no path to the pad"
-        )
-      );
-    }
+    this.checkConnectivity(structural.floatingBlocks, violations);
     if (structural.status === StructuralStatus.Overloaded || structural.status === StructuralStatus.Unsupportable) {
       violations.push(
         new Violation(
           ViolationKind.StructurallyUnsound,
-          structural.criticalJoints.length > 0 ? -1 : -1,
+          -1,
           "load factor " + structural.loadFactor.toFixed(3)
         )
       );
@@ -118,6 +103,55 @@ export class BlueprintValidator {
 
     const readouts = this.buildStationReadouts(structure, violations);
     return new ValidationReport(violations, readouts, structural, cost, allowance);
+  }
+
+  /**
+   * Everything above except the linear program: the checks cheap enough to re-run on every
+   * edit (UI spec 3.1). The violation order matches `validate` so the editor's panel does
+   * not reshuffle when the debounced structural solve lands.
+   */
+  public validateGeometry(
+    blueprint: Blueprint,
+    surface: SupportSurface,
+    budget: BudgetProvider
+  ): GeometryReport {
+    const violations: Violation[] = [];
+    const cost = blueprint.totalCost(this.materials);
+    const allowance = budget.materialBudget();
+    this.checkBudget(cost, allowance, violations);
+    this.checkRequiredBlocks(blueprint, violations);
+
+    const structure = new BlockStructure(blueprint);
+    const joints = this.solver.buildJointGraph(structure, surface);
+    const floating = SupportAnalysis.floatingBlocks(structure, joints);
+    this.checkConnectivity(floating, violations);
+
+    const readouts = this.buildStationReadouts(structure, violations);
+    return new GeometryReport(violations, readouts, cost, allowance, floating);
+  }
+
+  private checkBudget(cost: number, allowance: number, violations: Violation[]): void {
+    if (cost > allowance) {
+      violations.push(
+        new Violation(
+          ViolationKind.OverBudget,
+          -1,
+          cost.toString() + " of " + allowance.toString() + " material"
+        )
+      );
+    }
+  }
+
+  private checkConnectivity(floating: readonly number[], violations: Violation[]): void {
+    if (floating.length > 0) {
+      violations.push(
+        new Violation(
+          ViolationKind.DisconnectedBlocks,
+          floating[0],
+          floating.length.toString() + " block(s) with no path to the pad"
+        )
+      );
+    }
   }
 
   private checkRequiredBlocks(blueprint: Blueprint, violations: Violation[]): void {

@@ -19,6 +19,25 @@ import { BlockStructure } from "../structure/BlockStructure";
  * behind another one, which reports 0% -- and a grazing obstruction two voxels out would
  * need a proper voxel traversal instead.
  */
+export class ArcSample {
+  /** Horizontal direction of the ray, normalised the way the walk uses it. */
+  public readonly dirX: number;
+  public readonly dirZ: number;
+  public readonly clear: boolean;
+  /** Steps walked before something stopped it, or `range` when it left the structure. */
+  public readonly steps: number;
+  /** The block that stopped it, or -1 when nothing did. */
+  public readonly blockedBy: number;
+
+  public constructor(dirX: number, dirZ: number, clear: boolean, steps: number, blockedBy: number) {
+    this.dirX = dirX;
+    this.dirZ = dirZ;
+    this.clear = clear;
+    this.steps = steps;
+    this.blockedBy = blockedBy;
+  }
+}
+
 export class FiringArc {
   /** Rays cast across the arc, odd so that one of them is the centre line. */
   public static readonly SAMPLE_COUNT: number = 9;
@@ -53,6 +72,29 @@ export class FiringArc {
     return FiringArc.isSampleClear(structure, station, facing, 0, range, (FiringArc.SAMPLE_COUNT - 1) / 2);
   }
 
+  /**
+   * Every sampled ray, with what stopped it.
+   *
+   * The editor and the arcs overlay both need the *shape* of the obstruction and not just
+   * the fraction -- "0% of the arc is clear" is a verdict, and "the gun in front of you is
+   * what is in the way" is something a player can act on. `clearFraction` is derived from
+   * this, so the number in the validation panel and the picture in the overlay cannot
+   * disagree.
+   */
+  public static samples(
+    structure: BlockStructure,
+    station: number,
+    facing: Direction,
+    halfAngle: number,
+    range: number
+  ): ArcSample[] {
+    const result: ArcSample[] = [];
+    for (let sample = 0; sample < FiringArc.SAMPLE_COUNT; sample++) {
+      result.push(FiringArc.walkSample(structure, station, facing, halfAngle, range, sample));
+    }
+    return result;
+  }
+
   private static isSampleClear(
     structure: BlockStructure,
     station: number,
@@ -61,6 +103,17 @@ export class FiringArc {
     range: number,
     sample: number
   ): boolean {
+    return FiringArc.walkSample(structure, station, facing, halfAngle, range, sample).clear;
+  }
+
+  private static walkSample(
+    structure: BlockStructure,
+    station: number,
+    facing: Direction,
+    halfAngle: number,
+    range: number,
+    sample: number
+  ): ArcSample {
     const middle = (FiringArc.SAMPLE_COUNT - 1) / 2;
     const offset = FiringArc.SAMPLE_COUNT === 1 ? 0 : (sample - middle) / middle;
     const angle = offset * halfAngle;
@@ -80,14 +133,15 @@ export class FiringArc {
         Math.round(origin.z + dirZ * step)
       );
       if (!structure.bounds.contains(cell)) {
-        return true; // the ray left the structure: nothing left to hit
+        // The ray left the structure: nothing left to hit.
+        return new ArcSample(dirX, dirZ, true, step, -1);
       }
       const block = structure.indexAt(cell);
       if (block >= 0 && block !== station) {
-        return false;
+        return new ArcSample(dirX, dirZ, false, step, block);
       }
     }
-    return true;
+    return new ArcSample(dirX, dirZ, true, range, -1);
   }
 
   /** Whether a world direction lies inside a station's arc. Used at runtime by targeting. */

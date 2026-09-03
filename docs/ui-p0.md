@@ -1,7 +1,8 @@
 # The P0 tester build
 
-Implements [UI spec — P0 tester build](ui-spec-p0.md) on top of the headless core described
-in [architecture.md](architecture.md). Static files, one URL, no install for the tester.
+Implements [UI spec — P0 tester build](../specs/20260902-ui-spec-p0-tester-build.md) on
+top of the headless core described in [architecture.md](architecture.md). Static files, one
+URL, no install for the tester.
 
 ```sh
 npm run dev        # vite dev server, hot-reloads data/dials.json

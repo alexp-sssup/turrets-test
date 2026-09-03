@@ -1,8 +1,9 @@
 # Turrets -- P0 prototype ("One Turret, One Lane")
 
 Deterministic implementation of the P0 prototype spec in
-[docs/prototype-spec-p0.md](docs/prototype-spec-p0.md), plus the browser tester build
-specified in [docs/ui-spec-p0.md](docs/ui-spec-p0.md).
+[specs/20260902-prototype-spec-p0.md](specs/20260902-prototype-spec-p0.md), plus the
+browser tester build specified in
+[specs/20260902-ui-spec-p0-tester-build.md](specs/20260902-ui-spec-p0-tester-build.md).
 
 The simulation core is headless and stays that way: it has no DOM reference of any kind, and
 CI fails if one appears (`npm run check:boundary`). The renderer sits on top of it and reads

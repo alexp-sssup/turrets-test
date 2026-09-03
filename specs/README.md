@@ -12,8 +12,9 @@ What is here so far:
 - [`20260903-mobile-ui.md`](20260903-mobile-ui.md) — touch and small screens, extending
   that one.
 
-`structural-solver.md` still lives in [`../docs/`](../docs), along with copies of the two
-P0 specs above; it will be moved or superseded here.
+`structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
+it will be moved or superseded here. The duplicate copies of the two P0 specs that sat
+beside it are gone -- the versions in this directory are the only ones.
 
 Conventions:
 

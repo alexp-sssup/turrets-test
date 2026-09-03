@@ -48,9 +48,12 @@ disagree, the spec wins and the code is the bug.
 - If a task needs behaviour no spec covers, say so and propose the spec wording
   rather than inventing the rule silently in code.
 - Land a spec change as its own commit, ahead of the code implementing it.
-- `docs/` holds the older P0 prototype, UI and structural-solver specs plus
-  `architecture.md`. Treat `specs/` as the destination for specs going forward;
-  `docs/` keeps the architecture notes and whatever has not been migrated yet.
+- `specs/` is the only place a spec lives. The stale copies of the P0 prototype and
+  tester-build specs that `docs/` used to carry beside them have been deleted, so
+  never re-add a spec there or leave a second copy of one behind: a reader who finds
+  two must not have to work out which one is current. What remains in `docs/` is
+  `architecture.md`, the tester-build notes, and `structural-solver.md`, the one spec
+  still awaiting migration here.
 
 ## Language: TypeScript now, C++ later
 
@@ -136,8 +139,9 @@ suite. Keep it that way.
 - `src/` — the simulation core (headless, no DOM) plus the renderer on top of it.
   One class per file, grouped into a directory per subsystem.
 - `test/` — `node:test` suites mirroring `src/`, run from the compiled output in `dist/`.
-- `docs/` — `architecture.md` plus the P0 prototype, UI and structural-solver specs
-  written before `specs/` existed.
+- `docs/` — `architecture.md`, the `ui-p0.md` tester-build notes, and
+  `structural-solver.md`, the last spec written before `specs/` existed and not yet
+  migrated into it.
 - `scripts/check-boundary.mjs` — enforces that the core keeps no DOM reference.
 
 Requires Node >= 22.

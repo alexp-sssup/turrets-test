@@ -36,6 +36,12 @@ The specs come first and the code follows. **All specs live in `specs/`.** Befor
 changing behaviour, read the spec section that governs it; if the spec and the code
 disagree, the spec wins and the code is the bug.
 
+- **Name every file in `specs/` `YYYYMMDD-<subject>.md`** -- the date the document
+  was first written, then its subject (`20260903-mobile-ui.md`). The prefix is how
+  a later reader sees the order the specs evolved in, so use the date of writing
+  when creating a file and leave it alone when editing one afterwards; it dates the
+  document, it does not version it. Renaming an existing spec means updating the
+  links to it in `specs/README.md` and in the other specs in the same commit.
 - Cite the spec in code and in tests. A comment or a test name that says
   `spec 4.5` is how a reader gets from an implementation back to the rule it
   serves, so keep those references accurate when specs are renumbered.

@@ -82,6 +82,7 @@ export class FrameBuilder {
       this.depotsOf(loop),
       this.crewOf(loop),
       this.attackersOf(loop),
+      loop.shotsThisTick,
       loop.eventCount,
       structure.aliveCount,
       loop.crew.aliveCount
@@ -179,6 +180,7 @@ export class FrameBuilder {
       report === null ? StructuralStatus.Sound : report.status,
       stations,
       depots,
+      [],
       [],
       [],
       0,

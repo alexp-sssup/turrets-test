@@ -31,6 +31,15 @@ export class VoxelIndexGrid {
     return this.cells[index];
   }
 
+  /** The same lookup from loose coordinates, for the renderer's per-cell neighbour tests. */
+  public getAt(x: number, y: number, z: number): number {
+    const index = this.boundsValue.indexAt(x, y, z);
+    if (index < 0) {
+      return EMPTY_CELL;
+    }
+    return this.cells[index];
+  }
+
   public set(position: IVec3, value: number): void {
     const index = this.boundsValue.indexOf(position);
     if (index < 0) {

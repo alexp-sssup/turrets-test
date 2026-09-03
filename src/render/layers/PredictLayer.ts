@@ -1,3 +1,4 @@
+import { CellSilhouette } from "../CellSilhouette";
 import { DrawContext, Layer } from "../Layer";
 import { Palette } from "../Palette";
 import { PredictOutcome } from "../PredictAnalysis";
@@ -40,16 +41,14 @@ export class PredictLayer implements Layer {
       PredictLayer.prompt(context, "hover or click a cell");
       return;
     }
-    const scale = context.projection.scale;
     const ctx = context.ctx;
 
     // The candidate itself.
-    const x = context.projection.screenXAt(focus.x, focus.z);
-    const y = context.projection.screenYAt(focus.x, focus.y);
+    CellSilhouette.trace(context, focus.x, focus.y, focus.z);
     ctx.strokeStyle = Palette.accent;
     ctx.lineWidth = 2;
     ctx.setLineDash([3, 2]);
-    ctx.strokeRect(x + 0.5, y + 0.5, scale - 1, scale - 1);
+    ctx.stroke();
     ctx.setLineDash([]);
     ctx.lineWidth = 1;
 
@@ -63,25 +62,22 @@ export class PredictLayer implements Layer {
       return;
     }
 
+    // What goes with it. Drawn at each block's own depth and occluded by nothing (isometric
+    // renderer spec 4.1): the answer to "what else falls" is worthless if the blocks that
+    // fall are behind a wall.
     const blueprint = context.frame.design.blueprint;
     for (let i = 0; i < outcome.lostBlocks.length; i++) {
       const position = blueprint.blockAt(outcome.lostBlocks[i]).position;
       const onSlice = position.x === context.view.slice;
-      const left = context.projection.screenXAt(position.x, position.z);
-      const top = context.projection.screenYAt(position.x, position.y);
-      ctx.globalAlpha = onSlice ? 0.55 : 0.2;
+      CellSilhouette.trace(context, position.x, position.y, position.z);
+      ctx.globalAlpha = onSlice ? 0.5 : 0.28;
       ctx.fillStyle = Palette.danger;
-      ctx.fillRect(left + 1, top + 1, scale - 2, scale - 2);
+      ctx.fill();
       ctx.globalAlpha = 1;
-      if (onSlice) {
-        ctx.strokeStyle = Palette.danger;
-        ctx.beginPath();
-        ctx.moveTo(left + 3, top + 3);
-        ctx.lineTo(left + scale - 3, top + scale - 3);
-        ctx.moveTo(left + scale - 3, top + 3);
-        ctx.lineTo(left + 3, top + scale - 3);
-        ctx.stroke();
-      }
+      ctx.strokeStyle = Palette.danger;
+      ctx.lineWidth = onSlice ? 1.5 : 1;
+      ctx.stroke();
+      ctx.lineWidth = 1;
     }
 
     PredictLayer.prompt(

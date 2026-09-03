@@ -2,6 +2,7 @@ import { OVERLAY_COUNT, OverlayMode, overlayLegend, overlayName } from "../rende
 import { Palette } from "../render/Palette";
 import { Dom } from "./Dom";
 import { FieldControls } from "./FieldControls";
+import { ViewMode, viewModeName } from "../render/ViewMode";
 import { ShellState } from "./ShellState";
 
 /**
@@ -39,6 +40,17 @@ export class Shell {
 
   public get element(): HTMLElement {
     return this.root;
+  }
+
+  /**
+   * The dev readout, which sits outside the shell header in the document.
+   *
+   * Exposed because it now carries a control -- the flat cross-section of the isometric
+   * renderer spec 9 -- and a control nobody delegated clicks to is a control that does
+   * nothing.
+   */
+  public get devElement(): HTMLElement {
+    return this.devBar;
   }
 
   public render(state: ShellState): void {
@@ -217,12 +229,26 @@ export class Shell {
         " ms (p95 " +
         Dom.number(state.renderP95, 1) +
         ")</span>" +
+        // Isometric renderer spec 8: degradation is announced, never silent. A tester who
+        // says "it looked different on my phone" and a reader of their attempt record should
+        // both be able to see that the renderer gave something up, and which thing.
+        (state.renderDetail === "full"
+          ? ""
+          : '<span class="dev-item warn">detail ' + Dom.escape(state.renderDetail) + "</span>") +
         '<span class="dev-item">cells ' +
         state.cellCount.toString() +
         "</span>" +
         '<span class="dev-item">tick ' +
         state.tick.toString() +
         "</span>" +
+        // Isometric renderer spec 9: the flat cross-section is a developer diagnostic and
+        // this is the only door to it. It is not a mode a tester can find, choose, or spend
+        // attention learning, because the build no longer validates it.
+        '<button class="dev-item dev-toggle' +
+        (state.viewMode === ViewMode.Flat ? " warn" : "") +
+        '" data-action="projection">' +
+        Dom.escape(viewModeName(state.viewMode)) +
+        "</button>" +
         '<span class="dev-item' +
         (state.stalled ? " bad" : "") +
         '">sim lead ' +

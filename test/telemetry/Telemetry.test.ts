@@ -133,29 +133,64 @@ describe("Telemetry", () => {
   });
 
   /**
-   * Depth view spec 8: the mode earns its place if it is a diagnosis tool rather than a
-   * sightseeing one, and a tester cannot be asked which it was for them.
+   * Isometric renderer spec 11: there is one projection now, so the questions are what the
+   * tester did with the camera and the cutaway -- and whether they did it before the wave or
+   * only after the turret had already fallen over.
    */
-  it("charges the seconds spent in the depth view, and whether it opened before the run", () => {
+  it("counts quarter turns, and whether any happened before the run", () => {
     const telemetry = new Telemetry("abc123");
     const record = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 1, 0);
 
-    telemetry.noteViewMode(true, 1000); // one flat second, then the depth view goes on
-    assert.equal(record.depthViewOpenedBeforeRun, true);
-    telemetry.noteRunning(true, 4000); // three seconds of it before the wave
-    telemetry.noteViewMode(false, 7000); // three more during it, then back to flat
-    telemetry.finishAttempt(AttemptOutcome.Lost, null, 9000);
+    telemetry.noteYaw(1000);
+    telemetry.noteYaw(2000);
+    assert.equal(record.yawChanges, 2);
+    assert.equal(record.yawChangedBeforeRun, true);
 
-    assert.ok(Math.abs(record.depthViewSeconds - 6) < 1e-9, "six seconds, flat time excluded");
-
-    // A tester who only reaches for it after the turret has fallen over is the case the
-    // field exists to separate, so opening it mid-run does not count as before the run.
     const second = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 1, 10000);
     telemetry.noteRunning(true, 10000);
-    telemetry.noteViewMode(true, 11000);
-    assert.equal(second.depthViewOpenedBeforeRun, false);
-    telemetry.finishAttempt(AttemptOutcome.Lost, null, 13000);
-    assert.ok(Math.abs(second.depthViewSeconds - 2) < 1e-9);
+    telemetry.noteYaw(11000);
+    assert.equal(second.yawChanges, 1);
+    assert.equal(second.yawChangedBeforeRun, false, "a camera turned only mid-run is sightseeing");
+  });
+
+  /**
+   * Spec 11: the same keystroke means "let me reach in and build" on Design and "let me see
+   * why that failed" on Run, so pooling the two would answer neither question. And run
+   * seconds spent with a cutaway engaged is the field that would falsify spec 1: if testers
+   * choose the diagram over the game, the argument for this renderer is wrong.
+   */
+  it("counts peel moves per screen and charges run time spent cut away", () => {
+    const telemetry = new Telemetry("abc123");
+    const record = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 1, 0);
+
+    telemetry.notePeelMove();
+    telemetry.notePeelMove();
+    telemetry.notePeel(true, 1000);
+    telemetry.noteRunning(true, 4000); // three peeled seconds, but before the wave
+    telemetry.notePeelMove();
+    telemetry.notePeel(false, 7000); // three peeled seconds during it, then solid again
+    telemetry.finishAttempt(AttemptOutcome.Lost, null, 9000);
+
+    assert.equal(record.peelMovesInDesign, 2);
+    assert.equal(record.peelMovesInRun, 1);
+    assert.ok(
+      Math.abs(record.runSecondsWithPeel - 3) < 1e-9,
+      "only the seconds that were both running and peeled"
+    );
+  });
+
+  /** Spec 11: a turret read at the floor rung is read with spec 3.2's detail already gone. */
+  it("counts the zoom rungs visited and the seconds spent at the floor rung", () => {
+    const telemetry = new Telemetry("abc123");
+    const record = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 1, 0);
+
+    telemetry.noteZoom(0, 0);
+    telemetry.noteZoom(3, 2000); // two seconds at the floor
+    telemetry.noteZoom(0, 5000);
+    telemetry.finishAttempt(AttemptOutcome.Lost, null, 6000); // one more at the floor
+
+    assert.equal(record.zoomRungsUsed, 2, "two distinct rungs, visited three times");
+    assert.ok(Math.abs(record.secondsAtFloorRung - 3) < 1e-9);
   });
 
   it("tracks how much of a replay was watched and how hard it was to find the moment", () => {
@@ -241,7 +276,7 @@ describe("AttemptExport", () => {
    * the segment has to be in the file: without it a compact-device attempt gets pooled into
    * a single overall readability number, and §10's risk becomes invisible.
    */
-  it("carries the device the attempt was flown on, at format 2 (mobile UI spec 9.1)", () => {
+  it("carries the device the attempt was flown on, at format 4 (mobile UI spec 9.1)", () => {
     const telemetry = new Telemetry("mob001");
     const record = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 7, 0);
     record.device.layoutMode = "compact";
@@ -279,7 +314,7 @@ describe("AttemptExport", () => {
       };
     };
 
-    assert.equal(parsed.formatVersion, 3);
+    assert.equal(parsed.formatVersion, 4);
     assert.equal(parsed.metrics.device.layoutMode, "compact");
     assert.equal(parsed.metrics.device.pointerKind, "coarse");
     assert.equal(parsed.metrics.device.viewportW, 390);

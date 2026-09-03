@@ -28,6 +28,7 @@ import { InputSource } from "./InputSource";
 import { InputKind, Replay, ReplayRecorder } from "./ReplayRecorder";
 import { RunEvent, RunEventKind } from "./RunEvent";
 import { RunOutcome, RunResult } from "./RunResult";
+import { ShotTrace } from "./ShotTrace";
 import { TargetingSystem } from "./TargetingSystem";
 import { WaveScript } from "./WaveScript";
 
@@ -107,6 +108,7 @@ export class RunLoop {
   private lost: boolean;
   private readonly waveCount: number;
   private firingThisTickValue: number[];
+  private shotsThisTickValue: ShotTrace[];
   private lastReportValue: StructuralReport | null;
   private requestedRepairDetails: number;
   private requestedRunners: number;
@@ -170,6 +172,7 @@ export class RunLoop {
     this.lost = false;
     this.waveCount = script.waveCount < dials.waveCount ? script.waveCount : dials.waveCount;
     this.firingThisTickValue = [];
+    this.shotsThisTickValue = [];
     this.lastReportValue = null;
     this.requestedRepairDetails = -1;
     this.requestedRunners = -1;
@@ -272,6 +275,17 @@ export class RunLoop {
     return this.firingThisTickValue;
   }
 
+  /**
+   * Every round that flew on the tick just simulated, in both directions.
+   *
+   * Reporting only, for the renderer to draw a shot along the path the damage actually took
+   * (isometric renderer spec 7.5). A fresh array per tick, so a frame that keeps the
+   * reference keeps a stable one.
+   */
+  public get shotsThisTick(): readonly ShotTrace[] {
+    return this.shotsThisTickValue;
+  }
+
   public reloadRemaining(station: number): number {
     const timer = this.reloadTimers.get(station);
     return timer === undefined ? 0 : timer;
@@ -364,6 +378,7 @@ export class RunLoop {
   private tickOnce(): TickResult {
     const step = this.dials.tickSeconds;
     this.applyInputs();
+    this.shotsThisTickValue = [];
     this.spawn();
     this.advanceAttackers(step);
     this.firingThisTickValue = this.fireStations();
@@ -558,6 +573,18 @@ export class RunLoop {
       return;
     }
     const hitBlock = this.structureValue.indexAt(impact.cell);
+    this.shotsThisTickValue.push(
+      new ShotTrace(
+        unit.laneX + 0.5,
+        this.arena.pad.level + 0.5,
+        unit.laneZ + 0.5,
+        impact.cell.x + 0.5,
+        impact.cell.y + 0.5,
+        impact.cell.z + 0.5,
+        impact.heading === Direction.NegY,
+        false
+      )
+    );
     const result = this.damage.applyImpact(this.structureValue, impact);
     this.recorder.record(
       this.time,
@@ -701,6 +728,19 @@ export class RunLoop {
       this.reloadTimers.set(station, weapon.reloadSeconds);
       this.shotsFired++;
       firing.push(station);
+      const muzzle = this.structureValue.blueprint.blockAt(station).position;
+      this.shotsThisTickValue.push(
+        new ShotTrace(
+          muzzle.x + 0.5,
+          muzzle.y + 0.5,
+          muzzle.z + 0.5,
+          target.laneX + 0.5,
+          this.arena.pad.level + 0.5,
+          target.laneZ + 0.5,
+          false,
+          true
+        )
+      );
       this.recorder.record(
         this.time,
         this.wave,

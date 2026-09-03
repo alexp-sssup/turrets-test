@@ -1,5 +1,7 @@
 import { IVec3 } from "../core/IVec3";
 import { ViewMode } from "../render/ViewMode";
+import { ViewYaw } from "../render/ViewYaw";
+import { ZoomLadder } from "../render/ZoomLadder";
 import { OverlayMode, ViewState } from "../render/ViewState";
 
 /**
@@ -61,7 +63,7 @@ export enum ViewCommandKind {
   Seek = 3,
   Pan = 4,
   Zoom = 5,
-  /** 2D-specific: which cross-section is drawn solid. */
+  /** Which cross-section is the build plane, and therefore the peel (iso renderer spec 6). */
   Slice = 6,
   /**
    * Frame the design in the viewport (mobile UI spec 7.1).
@@ -81,6 +83,14 @@ export enum ViewCommandKind {
    * it.
    */
   Mode = 8,
+  /**
+   * A quarter turn of the camera (isometric renderer spec 2.2).
+   *
+   * A view command like every other one here, and unlogged like every other one here: four
+   * yaws are four pictures of the same run, and an attempt flown at yaw 2 replays to the
+   * same final state hash as one flown at yaw 0 (spec 10.5).
+   */
+  Yaw = 9,
 }
 
 export class ViewCommand {
@@ -130,6 +140,10 @@ export class ViewCommand {
 
   public static mode(mode: ViewMode): ViewCommand {
     return new ViewCommand(ViewCommandKind.Mode, mode as number, 0, null);
+  }
+
+  public static yaw(id: number): ViewCommand {
+    return new ViewCommand(ViewCommandKind.Yaw, id, 0, null);
   }
 }
 
@@ -243,9 +257,15 @@ export class Dispatcher {
       this.view.mode = command.value as ViewMode;
       return;
     }
+    if (command.kind === ViewCommandKind.Yaw) {
+      this.view.yaw = ViewYaw.of(command.value);
+      return;
+    }
     if (command.kind === ViewCommandKind.Zoom) {
-      const next = this.view.scale * command.value;
-      this.view.scale = next < 6 ? 6 : next > 90 ? 90 : next;
+      // Zoom lands on a rung of the ladder and nowhere between (isometric renderer spec
+      // 2.3): every voxel vertex has to stay on an exact pixel, so a pinch snaps and so does
+      // a key.
+      this.view.scale = ZoomLadder.scaled(this.view.scale, command.value);
       return;
     }
     this.view.slice = command.value;

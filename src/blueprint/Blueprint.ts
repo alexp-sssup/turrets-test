@@ -68,6 +68,11 @@ export class Blueprint {
     return this.lookup.get(position);
   }
 
+  /** The same index from loose coordinates, without minting a position to ask with. */
+  public indexOfCell(x: number, y: number, z: number): number {
+    return this.lookup.getAt(x, y, z);
+  }
+
   public blockAtPosition(position: IVec3): BlueprintBlock | null {
     const index = this.indexAt(position);
     if (index === EMPTY_CELL) {

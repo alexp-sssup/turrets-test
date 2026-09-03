@@ -25,6 +25,10 @@ export class ShellState {
   public overlay: OverlayMode;
   /** Flat or 2.5D (depth view spec 5). Flat is what a session opens in. */
   public viewMode: ViewMode;
+  /** Which quarter turn the camera is at, for the compass (isometric renderer spec 9). */
+  public yaw: number;
+  /** Whether a cutaway is engaged, so the readout can name it (spec 6). */
+  public peeling: boolean;
   /** Sections standing between the viewer and the working plane, cut away by the peel rule. */
   public peeledSections: number;
   public slice: number;
@@ -60,6 +64,8 @@ export class ShellState {
   public slicePickerOpen: boolean;
   /** The dev chip's expanded state (4.2). The chip itself is never off. */
   public devExpanded: boolean;
+  /** What the renderer gave up to hold the budget, if anything (iso renderer spec 8). */
+  public renderDetail: string;
   public inDesign: boolean;
   public canUndo: boolean;
   public canRedo: boolean;
@@ -84,7 +90,9 @@ export class ShellState {
     this.crewRunners = 0;
     this.margin = Number.POSITIVE_INFINITY;
     this.overlay = OverlayMode.Material;
-    this.viewMode = ViewMode.Flat;
+    this.viewMode = ViewMode.Iso;
+    this.yaw = 0;
+    this.peeling = true;
     this.peeledSections = 0;
     this.slice = 0;
     this.sliceMin = 0;
@@ -109,6 +117,7 @@ export class ShellState {
     this.useSliceStepper = false;
     this.slicePickerOpen = false;
     this.devExpanded = false;
+    this.renderDetail = "full";
     this.inDesign = false;
     this.canUndo = false;
     this.canRedo = false;

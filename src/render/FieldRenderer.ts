@@ -1,5 +1,8 @@
 import { IVec3 } from "../core/IVec3";
 import { FieldFrame } from "./FieldFrame";
+import { DetailLevel } from "./DetailLevel";
+import { FrameCells } from "./FrameCells";
+import { PeelPlane } from "./PeelPlane";
 import { DrawContext, Layer } from "./Layer";
 import { Projection } from "./Projection";
 import { ViewState, OverlayMode } from "./ViewState";
@@ -23,10 +26,21 @@ export class FieldRenderer {
   private readonly baseLayers: readonly Layer[];
   private readonly overlays: Map<number, Layer>;
   public readonly predict: PredictLayer;
+  /** The degradation order of spec 8, driven by the render p95 this class already measures. */
+  public readonly detail: DetailLevel;
   private widthPx: number;
   private heightPx: number;
   private lastRenderMs: number;
+  private ratio: number;
   private renderSamples: number[];
+  /**
+   * Render samples kept per yaw (isometric renderer spec 11).
+   *
+   * Fill cost differs by silhouette, so one pooled p95 would hide a yaw that is expensive
+   * to draw behind three that are cheap -- and the yaw a tester actually sits in is the one
+   * whose budget matters.
+   */
+  private readonly yawSamples: number[][];
 
   public constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -36,6 +50,7 @@ export class FieldRenderer {
     }
     this.ctx = ctx;
     this.predict = new PredictLayer();
+    this.detail = new DetailLevel();
     this.baseLayers = [new BaseLayer(), new ActorLayer()];
     this.overlays = new Map<number, Layer>();
     this.overlays.set(OverlayMode.Stress as number, new StressLayer());
@@ -45,7 +60,9 @@ export class FieldRenderer {
     this.widthPx = 0;
     this.heightPx = 0;
     this.lastRenderMs = 0;
+    this.ratio = 1;
     this.renderSamples = [];
+    this.yawSamples = [[], [], [], []];
   }
 
   public get width(): number {
@@ -62,12 +79,21 @@ export class FieldRenderer {
 
   /** 95th percentile render cost, which is the number UI spec 6 asks for. */
   public renderP95(): number {
-    if (this.renderSamples.length === 0) {
+    return FieldRenderer.percentile95(this.renderSamples);
+  }
+
+  /** The same, for one yaw (spec 11). */
+  public renderP95OfYaw(yaw: number): number {
+    return FieldRenderer.percentile95(this.yawSamples[yaw]);
+  }
+
+  private static percentile95(samples: readonly number[]): number {
+    if (samples.length === 0) {
       return 0;
     }
     const sorted: number[] = [];
-    for (let i = 0; i < this.renderSamples.length; i++) {
-      sorted.push(this.renderSamples[i]);
+    for (let i = 0; i < samples.length; i++) {
+      sorted.push(samples[i]);
     }
     sorted.sort((a: number, b: number): number => a - b);
     const index = Math.floor(sorted.length * 0.95);
@@ -116,6 +142,7 @@ export class FieldRenderer {
       return false;
     }
     const ratio = FieldRenderer.effectivePixelRatio(width, height, reported);
+    this.ratio = ratio;
     this.widthPx = width;
     this.heightPx = height;
     this.canvas.width = Math.round(width * ratio);
@@ -128,15 +155,44 @@ export class FieldRenderer {
     return new Projection(frame.design, view, this.widthPx, this.heightPx);
   }
 
+  /** The cell a click *places* into: the build plane (isometric renderer spec 5.3). */
   public cellAt(frame: FieldFrame, view: ViewState, clientX: number, clientY: number): IVec3 {
     const rect = this.canvas.getBoundingClientRect();
     return this.projection(frame, view).cellAt(clientX - rect.left, clientY - rect.top);
   }
 
+  /**
+   * The block a click *inspects*: the frontmost visible one under the pointer, wherever it
+   * stands in the world (spec 5.2). `null` over empty scene.
+   */
+  public pickAt(
+    frame: FieldFrame,
+    view: ViewState,
+    clientX: number,
+    clientY: number
+  ): IVec3 | null {
+    const rect = this.canvas.getBoundingClientRect();
+    const peel = new PeelPlane(
+      frame.design.sliceMin,
+      frame.design.sliceMax,
+      view.slice,
+      view.yaw,
+      view.mode,
+      view.peel
+    );
+    const cells = new FrameCells(frame, peel, true);
+    return this.projection(frame, view).pick(
+      cells,
+      frame.design.viewBounds,
+      clientX - rect.left,
+      clientY - rect.top
+    );
+  }
+
   public render(frame: FieldFrame, view: ViewState): void {
     const started = FieldRenderer.now();
     const projection = this.projection(frame, view);
-    const context = new DrawContext(this.ctx, frame, view, projection);
+    const context = new DrawContext(this.ctx, frame, view, projection, this.ratio, this.detail);
     for (let i = 0; i < this.baseLayers.length; i++) {
       this.baseLayers[i].draw(context);
     }
@@ -148,6 +204,12 @@ export class FieldRenderer {
     this.renderSamples.push(this.lastRenderMs);
     if (this.renderSamples.length > 600) {
       this.renderSamples = this.renderSamples.slice(this.renderSamples.length - 600);
+    }
+    this.detail.observe(this.renderP95());
+    const perYaw = this.yawSamples[view.yaw.id];
+    perYaw.push(this.lastRenderMs);
+    if (perYaw.length > 300) {
+      perYaw.splice(0, perYaw.length - 300);
     }
   }
 

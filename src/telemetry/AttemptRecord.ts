@@ -93,16 +93,31 @@ export class AttemptRecord {
   public replayScrubCount: number;
   public readonly overlayDwell: OverlayDwell;
   /**
-   * Seconds spent in the 2.5D depth view, and whether it was opened before the wave
-   * (depth view spec 8).
+   * What the tester did with the camera and the cutaway (isometric renderer spec 11).
    *
-   * The mode earns its place if attempts that used it fix the joint more often than
-   * attempts that did not, and does not if it is only ever opened after the turret has
-   * already fallen over. Neither question can be asked of a tester directly, for the same
-   * reason UI spec 7.3 gives for every other field here.
+   * There is one projection now, so "did they use the 2.5D mode" is not a question any more.
+   * These are the questions that replace it, and each is here because a tester cannot be
+   * asked it directly:
+   *
+   * * **Yaw changes**, and whether any happened before the first run: is the fourth wall
+   *   being looked behind, or is the default view all anyone ever sees? If nobody turns the
+   *   camera, the four yaws were scope that should have gone elsewhere.
+   * * **Peel moves**, counted separately in Design and in Run: is the cutaway a build tool,
+   *   a diagnosis tool, or both?
+   * * **Run seconds with a peel engaged**: if this is high, testers are choosing the diagram
+   *   over the game, and spec 1's whole argument is wrong.
+   * * **Zoom rungs used and seconds at the floor rung**: is a phone tester reading the
+   *   turret at a size where spec 3.2 has already dropped the detail?
    */
-  public depthViewSeconds: number;
-  public depthViewOpenedBeforeRun: boolean;
+  public yawChanges: number;
+  public yawChangedBeforeRun: boolean;
+  public peelMovesInDesign: number;
+  public peelMovesInRun: number;
+  public runSecondsWithPeel: number;
+  public zoomRungsUsed: number;
+  public secondsAtFloorRung: number;
+  /** Render p95 per yaw, because fill cost differs by silhouette (spec 11). */
+  public readonly renderMsP95ByYaw: number[];
   public solverMsP95: number;
   public solverMsMax: number;
   public renderMsP95: number;
@@ -149,8 +164,14 @@ export class AttemptRecord {
     this.replayWatchFraction = 0;
     this.replayScrubCount = 0;
     this.overlayDwell = new OverlayDwell();
-    this.depthViewSeconds = 0;
-    this.depthViewOpenedBeforeRun = false;
+    this.yawChanges = 0;
+    this.yawChangedBeforeRun = false;
+    this.peelMovesInDesign = 0;
+    this.peelMovesInRun = 0;
+    this.runSecondsWithPeel = 0;
+    this.zoomRungsUsed = 0;
+    this.secondsAtFloorRung = 0;
+    this.renderMsP95ByYaw = [0, 0, 0, 0];
     this.solverMsP95 = 0;
     this.solverMsMax = 0;
     this.renderMsP95 = 0;

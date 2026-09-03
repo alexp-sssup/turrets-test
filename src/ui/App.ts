@@ -10,13 +10,16 @@ import { CrewRole } from "../crew/CrewMember";
 import { BlueprintValidator } from "../editor/BlueprintValidator";
 import { BlueprintCodec } from "../persistence/BlueprintCodec";
 import { BlueprintLibrary } from "../persistence/BlueprintLibrary";
-import { DepthOrder } from "../render/DepthOrder";
+import { ActorPainter } from "../render/ActorPainter";
+import { PeelPlane } from "../render/PeelPlane";
 import { FieldDesign } from "../render/FieldDesign";
 import { FieldFrame, isLoudStatus } from "../render/FieldFrame";
 import { FieldRenderer } from "../render/FieldRenderer";
 import { FrameBuilder } from "../render/FrameBuilder";
 import { PredictAnalysis, PredictOutcome } from "../render/PredictAnalysis";
-import { ViewMode, otherViewMode } from "../render/ViewMode";
+import { ViewMode } from "../render/ViewMode";
+import { ViewYaw } from "../render/ViewYaw";
+import { ZoomLadder } from "../render/ZoomLadder";
 import { OverlayMode, ViewState } from "../render/ViewState";
 import { Projection } from "../render/Projection";
 import { Arena } from "../sim/Arena";
@@ -114,6 +117,7 @@ export class App implements SimTarget, FitTarget {
   private banner: string;
   private importText: string;
   private devExpanded: boolean;
+  private lastZoomRung: number;
   private slicePickerOpen: boolean;
   /**
    * Whether the tap that opened a double-tap pair actually placed a cell (mobile UI spec
@@ -185,6 +189,10 @@ export class App implements SimTarget, FitTarget {
     this.attempt = null;
     this.guided = this.store.read(SEEN_GUIDED_RUN_KEY) === null;
     this.screen = this.guided ? Screen.Run : Screen.Design;
+    // Isometric renderer spec 6: the peel default belongs to the screen, and a guided first
+    // session opens on Run -- which is the game view, solid, with nothing cut away. Set here
+    // as well as in `goTo`, because the first screen is not arrived at through it.
+    this.view.peel = this.screen === Screen.Design;
     this.panelDirty = true;
     this.lastPanelMs = 0;
     this.lastShellMs = 0;
@@ -194,6 +202,7 @@ export class App implements SimTarget, FitTarget {
     this.panning = false;
     this.panFromX = 0;
     this.panFromY = 0;
+    this.lastZoomRung = -1;
     this.predictRequestedAtMs = 0;
     this.predictCell = null;
     this.repairDetails = 1;
@@ -359,7 +368,15 @@ export class App implements SimTarget, FitTarget {
     }
 
     const frame = this.frame();
+    this.noteZoomRung();
     this.renderer.render(frame, this.view);
+    // Isometric renderer spec 8: the last rung of the degradation order is a rung down the
+    // zoom ladder, and the zoom belongs to the view rather than to the renderer -- so the
+    // renderer asks and this applies it, once per level.
+    if (this.renderer.detail.takeZoomRequest() && this.view.scale > ZoomLadder.floor) {
+      this.zoomBy(0.5);
+      this.panelDirty = true;
+    }
     this.runPredictIfDue(now, frame);
 
     // Panels are cheap but not free, and nothing in them changes faster than a tester can
@@ -393,18 +410,61 @@ export class App implements SimTarget, FitTarget {
   }
 
   /**
-   * Flat to 2.5D and back (depth view spec 5).
+   * A quarter turn of the camera (isometric renderer spec 2.2, spec 9).
    *
-   * Deliberately does **not** refit. The depth offset is measured from the active
-   * cross-section, so the section the tester is working in is in the same place before and
-   * after the toggle, and reframing the view under them would throw away the one property
-   * the projection was chosen for. `fit` is one key away when they want it.
+   * Four states and one key each way, which is what makes this not an orbit camera: there is
+   * nothing to reset, no angle to persist and nothing to un-learn. What it buys is the one
+   * question a fixed camera cannot answer -- what is behind my turret -- and that is exactly
+   * the blind spot UI spec 1.3 needs closed.
+   *
+   * Refits, unlike everything else that changes the view. The screen extent of a scene
+   * differs by yaw, and the alternative to reframing is a turret half off the edge; `fit`
+   * picks the largest rung that still fits, so a turn does not zoom a tester out for no
+   * reason either (spec 2.4).
    */
-  private toggleViewMode(): void {
-    const next = otherViewMode(this.view.mode);
-    this.dispatcher.dispatchView(ViewCommand.mode(next));
-    this.telemetry.noteViewMode(next === ViewMode.Depth, App.now());
+  private turnCamera(quarters: number): void {
+    this.dispatcher.dispatchView(ViewCommand.yaw(this.view.yaw.turned(quarters).id));
+    Projection.fit(this.currentDesign(), this.view, this.renderer.width, this.renderer.height);
+    this.telemetry.noteYaw(App.now());
     this.panelDirty = true;
+  }
+
+  /**
+   * Moves the build plane, and with it the cutaway (spec 6).
+   *
+   * One control, not two: stepping toward the camera peels one more wall off the front. On
+   * Run and Replay the peel starts disengaged -- that is the game view -- so the first step
+   * a tester takes there is also the one that opens the turret up, which is what they meant
+   * by pressing it.
+   */
+  private moveBuildPlane(next: number): void {
+    this.dispatcher.dispatchView(ViewCommand.slice(next));
+    this.telemetry.notePeelMove();
+    if (!this.view.peel && (this.screen === Screen.Run || this.screen === Screen.Replay)) {
+      this.view.peel = true;
+      this.telemetry.notePeel(true, App.now());
+    }
+    this.panelDirty = true;
+  }
+
+  private zoomBy(factor: number): void {
+    this.dispatcher.dispatchView(ViewCommand.zoom(factor));
+  }
+
+  /**
+   * Reports the zoom rung when it changes (isometric renderer spec 11).
+   *
+   * Once a frame and from one place, because the rung moves for four different reasons -- a
+   * wheel, a pinch, a fit, and spec 8's degradation -- and a metric that four call sites have
+   * to remember to report is a metric that is silently missing from a third of the records.
+   */
+  private noteZoomRung(): void {
+    const rung = ZoomLadder.rungOf(this.view.scale);
+    if (rung === this.lastZoomRung) {
+      return;
+    }
+    this.lastZoomRung = rung;
+    this.telemetry.noteZoom(rung, App.now());
   }
 
   private currentDesign(): FieldDesign {
@@ -617,6 +677,9 @@ export class App implements SimTarget, FitTarget {
     device.pinches = this.gesturePinches;
     device.doubleTaps = this.gestureDoubleTaps;
     attempt.writeRecord(this.renderer.renderP95());
+    for (let yaw = 0; yaw < ViewYaw.COUNT; yaw++) {
+      attempt.record.renderMsP95ByYaw[yaw] = this.renderer.renderP95OfYaw(yaw);
+    }
   }
 
   /** 9.1: the layout and the pointer as they were at the moment the wave started. */
@@ -794,6 +857,14 @@ export class App implements SimTarget, FitTarget {
     this.panelDirty = true;
     this.slicePickerOpen = false;
     this.syncSheetTabs();
+    // Isometric renderer spec 6: Design is a workshop and opens on an open cutaway; Run and
+    // Replay are the game and open on a solid turret. The loop alternates between the two,
+    // and the second half is the half that was worthless when a run was a cross-section.
+    const peel = screen === Screen.Design;
+    if (peel !== this.view.peel) {
+      this.view.peel = peel;
+      this.telemetry.notePeel(peel, App.now());
+    }
     if (screen === Screen.Design || screen === Screen.Library) {
       this.telemetry.noteRunning(false, App.now());
     }
@@ -1013,11 +1084,15 @@ export class App implements SimTarget, FitTarget {
     state.sliceMin = frame.design.sliceMin;
     state.sliceMax = frame.design.sliceMax;
     state.viewMode = this.view.mode;
-    state.peeledSections = new DepthOrder(
+    state.yaw = this.view.yaw.id;
+    state.peeling = this.view.peel;
+    state.peeledSections = new PeelPlane(
       frame.design.sliceMin,
       frame.design.sliceMax,
       this.view.slice,
-      this.view.mode
+      this.view.yaw,
+      this.view.mode,
+      this.view.peel
     ).peeledCount;
     const sliceCounts: number[] = [];
     for (let x = frame.design.sliceMin; x <= frame.design.sliceMax; x++) {
@@ -1030,6 +1105,7 @@ export class App implements SimTarget, FitTarget {
     state.solverP95 = attempt === null ? this.editor.solveMs : attempt.solverMs.p95;
     state.renderMs = this.renderer.renderMs;
     state.renderP95 = this.renderer.renderP95();
+    state.renderDetail = this.renderer.detail.describe();
     state.cellCount = frame.aliveBlocks;
     state.tick = frame.tick;
     state.leadSeconds = attempt === null ? 0 : attempt.leadSeconds;
@@ -1135,6 +1211,9 @@ export class App implements SimTarget, FitTarget {
     Dom.onAction(this.shell.element, (action: string, value: string): void => {
       this.onAction(action, value);
     });
+    Dom.onAction(this.shell.devElement, (action: string, value: string): void => {
+      this.onAction(action, value);
+    });
     Dom.onInput(this.panelRoot, (name: string, value: string): void => {
       this.onFieldInput(name, value);
     });
@@ -1210,7 +1289,7 @@ export class App implements SimTarget, FitTarget {
       "wheel",
       (event: WheelEvent): void => {
         event.preventDefault();
-        this.dispatcher.dispatchView(ViewCommand.zoom(event.deltaY < 0 ? 1.1 : 1 / 1.1));
+        this.zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1);
       },
       { passive: false }
     );
@@ -1267,7 +1346,7 @@ export class App implements SimTarget, FitTarget {
       return;
     }
     if (kind === GestureKind.Zoom) {
-      this.dispatcher.dispatchView(ViewCommand.zoom(intent.scale));
+      this.zoomBy(intent.scale);
       return;
     }
     if (kind === GestureKind.Pan) {
@@ -1298,7 +1377,7 @@ export class App implements SimTarget, FitTarget {
       // reads, so a sweep is hover, performed deliberately (6.3).
       this.dragFrom = null;
       this.dragTo = null;
-      this.dispatcher.dispatchView(ViewCommand.select(this.cellAtClient(intent.x, intent.y)));
+      this.dispatcher.dispatchView(ViewCommand.select(this.inspectCellAt(intent.x, intent.y)));
       this.panelDirty = true;
       return;
     }
@@ -1324,7 +1403,7 @@ export class App implements SimTarget, FitTarget {
     if (target >= 0) {
       this.dispatcher.dispatchSim(SimCommand.focus(target));
     } else {
-      this.dispatcher.dispatchView(ViewCommand.select(cell));
+      this.dispatcher.dispatchView(ViewCommand.select(this.inspectCellAt(clientX, clientY)));
     }
     this.panelDirty = true;
   }
@@ -1392,6 +1471,23 @@ export class App implements SimTarget, FitTarget {
     return this.renderer.cellAt(this.frame(), this.view, clientX, clientY);
   }
 
+  /**
+   * The cell an inspect addresses (isometric renderer spec 5.2, spec 5.3).
+   *
+   * Two rules, and the split is the spec's: **placement lands in the build plane and only
+   * ever there**, so on Design a hover has to predict where the click will go and therefore
+   * reads the plane too. Everywhere else there is nothing to place, so an inspect addresses
+   * the frontmost visible block instead -- which is what a tester means when they point at a
+   * wall four sections back during a replay.
+   */
+  private inspectCellAt(clientX: number, clientY: number): IVec3 {
+    if (this.screen === Screen.Design) {
+      return this.cellAtClient(clientX, clientY);
+    }
+    const picked = this.renderer.pickAt(this.frame(), this.view, clientX, clientY);
+    return picked === null ? this.cellAtClient(clientX, clientY) : picked;
+  }
+
   private onCanvasDown(event: PointerEvent): void {
     const cell = this.renderer.cellAt(this.frame(), this.view, event.clientX, event.clientY);
     if (event.button === 1 || event.button === 2 || event.shiftKey) {
@@ -1421,7 +1517,9 @@ export class App implements SimTarget, FitTarget {
         return;
       }
     }
-    this.dispatcher.dispatchView(ViewCommand.select(cell));
+    this.dispatcher.dispatchView(
+      ViewCommand.select(this.inspectCellAt(event.clientX, event.clientY))
+    );
     this.panelDirty = true;
   }
 
@@ -1434,10 +1532,11 @@ export class App implements SimTarget, FitTarget {
       this.panFromY = event.clientY;
       return;
     }
-    const cell = this.renderer.cellAt(this.frame(), this.view, event.clientX, event.clientY);
-    this.dispatcher.dispatchView(ViewCommand.inspect(cell));
+    this.dispatcher.dispatchView(
+      ViewCommand.inspect(this.inspectCellAt(event.clientX, event.clientY))
+    );
     if (this.dragFrom !== null) {
-      this.dragTo = cell;
+      this.dragTo = this.cellAtClient(event.clientX, event.clientY);
     }
   }
 
@@ -1458,7 +1557,13 @@ export class App implements SimTarget, FitTarget {
     this.dispatcher.dispatchView(ViewCommand.select(to));
   }
 
-  /** Hit-tests the lane for a focus-fire click. Attackers are drawn on the ground line. */
+  /**
+   * Hit-tests the lane for a focus-fire click.
+   *
+   * Against the projected centre of each unit's body rather than against a ground line: the
+   * units stand in the world now (isometric renderer spec 7.4), so where they are on screen
+   * is a question for the projection and not for a screen-space rule about lanes.
+   */
   private attackerAt(clientX: number, clientY: number): number {
     const attempt = this.attempt;
     if (attempt === null) {
@@ -1469,16 +1574,20 @@ export class App implements SimTarget, FitTarget {
     const rect = this.canvas.getBoundingClientRect();
     const localX = clientX - rect.left;
     const localY = clientY - rect.top;
-    const groundY = projection.screenY(frame.design.pad.level);
-    if (localY < groundY - projection.scale * 1.6 || localY > groundY) {
-      return -1;
-    }
+    const level = frame.design.pad.level;
     let best = -1;
     let bestDistance = projection.scale;
     for (let i = 0; i < frame.attackers.length; i++) {
       const unit = frame.attackers[i];
-      const x = projection.screenX(unit.laneZ) + projection.scale * 0.5;
-      const distance = Math.abs(x - localX);
+      const x = projection.screenX(unit.laneX + 0.5, unit.laneZ + 0.5);
+      const y = projection.screenY(
+        unit.laneX + 0.5,
+        level + ActorPainter.ATTACKER_HEIGHT * 0.5,
+        unit.laneZ + 0.5
+      );
+      const dx = x - localX;
+      const dy = y - localY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
       if (distance < bestDistance) {
         bestDistance = distance;
         best = unit.id;
@@ -1505,13 +1614,11 @@ export class App implements SimTarget, FitTarget {
     }
     if (key === "[" || key === "]") {
       const design = this.currentDesign();
-      const next = design.clampSlice(this.view.slice + (key === "[" ? -1 : 1));
-      this.dispatcher.dispatchView(ViewCommand.slice(next));
-      this.panelDirty = true;
+      this.moveBuildPlane(design.clampSlice(this.view.slice + (key === "[" ? -1 : 1)));
       return;
     }
-    if (key === "v") {
-      this.toggleViewMode();
+    if (key === "q" || key === "e") {
+      this.turnCamera(key === "q" ? 1 : -1);
       return;
     }
     if (key === "z" && this.screen === Screen.Design) {
@@ -1593,7 +1700,7 @@ export class App implements SimTarget, FitTarget {
       return;
     }
     if (action === "slice") {
-      this.dispatcher.dispatchView(ViewCommand.slice(Number(value)));
+      this.moveBuildPlane(Number(value));
       this.slicePickerOpen = false;
       this.panelDirty = true;
       return;
@@ -1603,10 +1710,7 @@ export class App implements SimTarget, FitTarget {
     // nothing here is a new `SimCommand` (7.1).
     if (action === "slice-step") {
       const design = this.currentDesign();
-      this.dispatcher.dispatchView(
-        ViewCommand.slice(design.clampSlice(this.view.slice + Number(value)))
-      );
-      this.panelDirty = true;
+      this.moveBuildPlane(design.clampSlice(this.view.slice + Number(value)));
       return;
     }
     if (action === "slice-picker") {
@@ -1614,8 +1718,8 @@ export class App implements SimTarget, FitTarget {
       this.panelDirty = true;
       return;
     }
-    if (action === "view-mode") {
-      this.toggleViewMode();
+    if (action === "yaw") {
+      this.turnCamera(Number(value));
       return;
     }
     if (action === "fit") {
@@ -1635,6 +1739,16 @@ export class App implements SimTarget, FitTarget {
     }
     if (action === "sheet-toggle") {
       this.sheet.toggle();
+      this.panelDirty = true;
+      return;
+    }
+    if (action === "projection") {
+      // Isometric renderer spec 9: the flat cross-section, from the dev readout only. Kept
+      // because it is the clearest possible picture of one slice and costs nothing to keep;
+      // out of the tester's control bar because the build no longer validates it.
+      const next = this.view.mode === ViewMode.Iso ? ViewMode.Flat : ViewMode.Iso;
+      this.dispatcher.dispatchView(ViewCommand.mode(next));
+      Projection.fit(this.currentDesign(), this.view, this.renderer.width, this.renderer.height);
       this.panelDirty = true;
       return;
     }

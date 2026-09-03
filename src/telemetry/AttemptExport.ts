@@ -19,7 +19,16 @@ export class AttemptExport {
    * ones. One artifact, three uses, and still one file per attempt: the export stays the
    * replay format and the batch input.
    */
-  public static readonly FORMAT_VERSION: number = 3;
+  public static readonly FORMAT_VERSION: number = 4;
+
+  /** Per-yaw render costs, rounded the way every other millisecond here is. */
+  private static rounded(values: readonly number[]): number[] {
+    const out: number[] = [];
+    for (let i = 0; i < values.length; i++) {
+      out.push(Number(values[i].toFixed(2)));
+    }
+    return out;
+  }
 
   public static toJson(record: AttemptRecord, summary: SessionSummary | null): string {
     return JSON.stringify(AttemptExport.toObject(record, summary));
@@ -103,8 +112,13 @@ export class AttemptExport {
           consultedSolverBeforeRun: record.overlayDwell.consultedSolverBeforeRun,
           solverDwellBeforeRunSeconds: Number(record.overlayDwell.solverDwellBeforeRun.toFixed(2)),
           predictOpenedDuringRun: record.predictOpenedDuringRun,
-          depthViewSeconds: Number(record.depthViewSeconds.toFixed(2)),
-          depthViewOpenedBeforeRun: record.depthViewOpenedBeforeRun,
+          yawChanges: record.yawChanges,
+          yawChangedBeforeRun: record.yawChangedBeforeRun,
+          peelMovesInDesign: record.peelMovesInDesign,
+          peelMovesInRun: record.peelMovesInRun,
+          runSecondsWithPeel: Number(record.runSecondsWithPeel.toFixed(2)),
+          zoomRungsUsed: record.zoomRungsUsed,
+          secondsAtFloorRung: Number(record.secondsAtFloorRung.toFixed(2)),
         },
         loop: {
           replayOpened: record.replayOpened,
@@ -149,6 +163,7 @@ export class AttemptExport {
           solverMsP95: Number(record.solverMsP95.toFixed(2)),
           solverMsMax: Number(record.solverMsMax.toFixed(2)),
           renderMsP95: Number(record.renderMsP95.toFixed(2)),
+          renderMsP95ByYaw: AttemptExport.rounded(record.renderMsP95ByYaw),
           solveCount: record.solveCount,
           cellCount: record.cellCount,
         },

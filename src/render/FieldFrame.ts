@@ -1,6 +1,7 @@
 import { ArcSample } from "../editor/FiringArc";
 import { Path } from "../path/Path";
 import { StructuralStatus } from "../structure/StructuralReport";
+import { ShotTrace } from "../sim/ShotTrace";
 import { FieldDesign } from "./FieldDesign";
 
 /**
@@ -268,6 +269,13 @@ export class FieldFrame {
   public readonly depots: readonly DepotSnapshot[];
   public readonly crew: readonly CrewSnapshot[];
   public readonly attackers: readonly AttackerSnapshot[];
+  /**
+   * Rounds that flew on this tick, in both directions (isometric renderer spec 7.5).
+   *
+   * A shot resolves in the tick it is fired, so this is what makes a shot drawable at all --
+   * and drawable along the path the damage actually took rather than as a flash beside it.
+   */
+  public readonly shots: readonly ShotTrace[];
   /** Events recorded up to and including this tick, as a count into the run's log. */
   public readonly eventCount: number;
   public readonly aliveBlocks: number;
@@ -290,6 +298,7 @@ export class FieldFrame {
     depots: readonly DepotSnapshot[],
     crew: readonly CrewSnapshot[],
     attackers: readonly AttackerSnapshot[],
+    shots: readonly ShotTrace[],
     eventCount: number,
     aliveBlocks: number,
     crewAlive: number
@@ -310,6 +319,7 @@ export class FieldFrame {
     this.depots = depots;
     this.crew = crew;
     this.attackers = attackers;
+    this.shots = shots;
     this.eventCount = eventCount;
     this.aliveBlocks = aliveBlocks;
     this.crewAlive = crewAlive;
@@ -334,6 +344,20 @@ export class FieldFrame {
 
   public static packState(alive: boolean, burning: boolean): number {
     return (alive ? BLOCK_ALIVE : 0) | (burning ? BLOCK_BURNING : 0);
+  }
+
+  /**
+   * The live block in a cell, or -1.
+   *
+   * The isometric composition asks this three or four times per cell (isometric renderer
+   * spec 3), so it takes coordinates rather than a position and allocates nothing.
+   */
+  public liveBlockAt(x: number, y: number, z: number): number {
+    const index = this.design.blueprint.indexOfCell(x, y, z);
+    if (index < 0) {
+      return -1;
+    }
+    return this.isAlive(index) ? index : -1;
   }
 
   public depotAt(block: number): DepotSnapshot | null {

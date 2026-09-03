@@ -1,4 +1,4 @@
-import { ViewMode, viewModeName } from "../render/ViewMode";
+import { ViewMode } from "../render/ViewMode";
 import { OVERLAY_COUNT, OverlayMode, overlayName } from "../render/ViewState";
 import { Dom } from "./Dom";
 import { ShellState } from "./ShellState";
@@ -59,9 +59,10 @@ export class FieldControls {
     new InputHint("fit", "", "", "double-tap to fit"),
     new InputHint("overlay", "1–5", "1–5 overlays", "overlay row below"),
     new InputHint("cross-section", "[ ]", "[ ] cross-section", "slice stepper below"),
-    // Depth view spec 5: one new binding and no new verbs. `[` and `]` already move the
-    // peel plane, because the peel plane is the cross-section.
-    new InputHint("depth", "v", "v flat / 2.5D", "flat / 2.5D toggle below"),
+    // Isometric renderer spec 9: one new verb. `[` and `]` already move the peel, because
+    // the peel plane is the cross-section.
+    new InputHint("yaw-left", "q", "q e turn the camera", "compass below"),
+    new InputHint("yaw-right", "e", "", ""),
     new InputHint("undo", "z", "", ""),
     new InputHint("redo", "y", "", ""),
     new InputHint("pause", "space", "", ""),
@@ -230,7 +231,7 @@ export class FieldControls {
         (state.paused ? "play" : "pause") +
         "</button>";
     }
-    html += FieldControls.viewModeControl(state);
+    html += FieldControls.yawControl(state);
     html += '<button class="field-button" data-action="fit">fit</button>';
     html += FieldControls.devChip(state);
     html += "</span>";
@@ -238,24 +239,31 @@ export class FieldControls {
   }
 
   /**
-   * The flat / 2.5D toggle (depth view spec 5).
+   * The compass: which way the camera faces, and a quarter turn either way (isometric
+   * renderer spec 9).
    *
-   * It names the mode that is *on* rather than the one it would switch to, for the reason
-   * 6.1 gives the overlay row: a control that names a state the tester cannot see is a
-   * control they have to press to read.
+   * Four states and two buttons. It names the yaw that is *on* rather than the one a press
+   * would reach, for the reason 6.1 gives the overlay row: a control that names a state the
+   * tester cannot see is a control they have to press in order to read.
    */
-  public static viewModeControl(state: ShellState): string {
-    const depth = state.viewMode === ViewMode.Depth;
+  public static yawControl(state: ShellState): string {
     return (
-      '<button class="field-button view-mode' +
-      (depth ? " active" : "") +
-      '" data-action="view-mode" title="' +
-      FieldControls.keyFor("depth") +
-      '">' +
-      Dom.escape(viewModeName(state.viewMode)) +
-      "</button>"
+      '<span class="yaw-control">' +
+      '<button class="field-button" data-action="yaw" data-value="1" title="' +
+      FieldControls.keyFor("yaw-left") +
+      '">↺</button>' +
+      '<span class="yaw-readout" title="camera">' +
+      Dom.escape(FieldControls.COMPASS[state.yaw % 4]) +
+      "</span>" +
+      '<button class="field-button" data-action="yaw" data-value="-1" title="' +
+      FieldControls.keyFor("yaw-right") +
+      '">↻</button>' +
+      "</span>"
     );
   }
+
+  /** The four yaws, as the corner of the pad the camera is looking from. */
+  private static readonly COMPASS: readonly string[] = ["◤", "◥", "◢", "◣"];
 
   private static scrub(state: ShellState): string {
     if (!state.showScrub) {
@@ -299,17 +307,17 @@ export class FieldControls {
   }
 
   /**
-   * How many sections the depth view has cut away in front of the working plane
-   * (depth view spec 5).
+   * How many sections the cutaway has taken off the front of the turret (isometric renderer
+   * spec 6).
    *
-   * A cutaway a tester has not noticed reads as a missing wall, and a tester who thinks
-   * they have lost a wall will go and rebuild one they already have.
+   * A cutaway a tester has not noticed reads as a missing wall, and a tester who thinks they
+   * have lost a wall will go and rebuild one they already have.
    */
   public static peelNote(state: ShellState): string {
-    if (state.viewMode !== ViewMode.Depth || state.peeledSections <= 0) {
+    if (state.viewMode !== ViewMode.Iso || !state.peeling || state.peeledSections <= 0) {
       return "";
     }
-    return " · " + state.peeledSections.toString() + " in front";
+    return " · " + state.peeledSections.toString() + " peeled";
   }
 
   /**

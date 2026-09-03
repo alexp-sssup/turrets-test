@@ -1,5 +1,7 @@
 import { IVec3 } from "../core/IVec3";
 import { ViewMode } from "./ViewMode";
+import { ViewYaw } from "./ViewYaw";
+import { ZoomLadder } from "./ZoomLadder";
 
 /**
  * The five overlays, numbered to match the keys that select them (UI spec 4).
@@ -61,19 +63,29 @@ export function overlayLegend(mode: OverlayMode): string {
 export class ViewState {
   public overlay: OverlayMode;
   /**
-   * Which projection the field is drawn with (depth view spec 2).
+   * Which projection the field is drawn with (isometric renderer spec 2).
    *
-   * `Flat` by default, because UI spec 7.2 opens a session mid-loop and a tester who has
-   * learned nothing yet should not have to learn a projection first.
+   * `Iso` always, for a tester: it is the only tester-facing projection and there is nothing
+   * to toggle. `Flat` is reachable from the dev readout alone (spec 9).
    */
   public mode: ViewMode;
+  /** Which quarter turn the camera is at (spec 2.2). Four states, `q` and `e`. */
+  public yaw: ViewYaw;
   /**
-   * Which x cross-section is drawn solid, and -- in the depth view -- where the cutaway
-   * plane sits (depth view spec 3). One control, not two: stepping toward the viewer peels
-   * one more wall off the front of the turret.
+   * Which x cross-section is the build plane, and therefore where the cutaway sits
+   * (spec 5.3, spec 6). One control, not two: stepping toward the camera peels one more wall
+   * off the front of the turret.
    */
   public slice: number;
-  /** Zoom, in screen pixels per voxel. */
+  /**
+   * Whether the sections between the camera and the build plane are peeled (spec 6).
+   *
+   * Per screen rather than per tester: Design opens on an open cutaway because that is a
+   * workshop, and Run and Replay open on a solid turret because that is the game. `[` and
+   * `]` still engage it during a run for a tester who wants to look inside a failure.
+   */
+  public peel: boolean;
+  /** Zoom, in screen pixels per voxel edge. Always a rung of `ZoomLadder` (spec 2.3). */
   public scale: number;
   /** Pan, in screen pixels. */
   public panX: number;
@@ -88,9 +100,11 @@ export class ViewState {
 
   public constructor(slice: number) {
     this.overlay = OverlayMode.Material;
-    this.mode = ViewMode.Flat;
+    this.mode = ViewMode.Iso;
+    this.yaw = ViewYaw.initial;
     this.slice = slice;
-    this.scale = 26;
+    this.peel = true;
+    this.scale = ZoomLadder.initial;
     this.panX = 0;
     this.panY = 0;
     this.hover = null;

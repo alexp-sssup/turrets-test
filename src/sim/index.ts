@@ -11,5 +11,6 @@ export { RunLoop, RunPhase } from "./RunLoop";
 export { RunOutcome, RunResult, runOutcomeName } from "./RunResult";
 export { RunSimulation } from "./RunSimulation";
 export { ScriptedAttacker } from "./ScriptedAttacker";
+export { ShotTrace } from "./ShotTrace";
 export { TargetingSystem } from "./TargetingSystem";
 export { SpawnOrder, Wave, WaveScript } from "./WaveScript";

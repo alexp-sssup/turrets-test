@@ -1,4 +1,5 @@
 import { StationSnapshot } from "../FieldFrame";
+import { CellSilhouette } from "../CellSilhouette";
 import { DrawContext, Layer } from "../Layer";
 import { Palette } from "../Palette";
 import { OverlayMode, overlayName } from "../ViewState";
@@ -6,22 +7,19 @@ import { OverlayMode, overlayName } from "../ViewState";
 /**
  * Firing arcs and the shadows a design casts on itself.
  *
- * There is an honesty problem here that the 2D decision creates and this layer has to
- * answer for. An arc is a fan in the *horizontal* plane, and the main view is a vertical
- * cross-section, so the fan does not live in the drawn plane at all. Drawing it as a wedge
- * in the (z, y) view would be a picture of something that is not there.
+ * The flat cross-section created an honesty problem here that this projection removes. An
+ * arc is a fan in the **horizontal** plane, and a side-on view of a vertical slice had
+ * nowhere to put it, so the fan had to be exiled to a plan inset and the main view got a
+ * single sight line. In the isometric view the fan lies on the plane it belongs to: nine
+ * rays out of the muzzle at the station's own height, clear ones and blocked ones coloured,
+ * drawn where a tester can compare them against the blocks that stop them.
  *
- * So it is drawn twice, each in the plane it belongs to:
- *
- * * In the main view, the sight line down the lane, ending exactly where the ray was
- *   stopped, with the offending block marked. That answers "why is this gun useless".
- * * In a small plan inset, the real nine-ray fan in (x, z) with clear and blocked rays
- *   coloured. That answers "how much of the arc do I actually have", and it is where a gun
- *   buried behind another gun visibly reports nothing.
+ * The plan inset stays, small and fixed in the corner. It is a reference, not a second
+ * camera: it shows the whole arc at once even when the fan runs off the frame, and it is the
+ * one place a gun buried behind another gun visibly reports nothing.
  *
  * Both read the same `ArcSample` walk the validator prints its percentage from, so the
- * picture and the number cannot disagree. UI spec 2 notes that 2D only gives §1.3 a partial
- * answer; this is the part it can give.
+ * picture and the number cannot disagree.
  */
 export class ArcsLayer implements Layer {
   public readonly id: string = overlayName(OverlayMode.Arcs);
@@ -29,54 +27,72 @@ export class ArcsLayer implements Layer {
   public draw(context: DrawContext): void {
     const frame = context.frame;
     for (let i = 0; i < frame.stations.length; i++) {
-      this.drawSightLine(context, frame.stations[i]);
+      this.drawFan(context, frame.stations[i]);
     }
     this.drawPlanInset(context);
   }
 
-  private drawSightLine(context: DrawContext, station: StationSnapshot): void {
+  /**
+   * The fan, on the horizontal plane through the muzzle.
+   *
+   * Every ray the validator walked, ending exactly where it was stopped, with the offending
+   * block ringed. That answers both questions at once -- "why is this gun useless" and "how
+   * much of the arc do I actually have" -- which the flat view had to split between a line
+   * and an inset.
+   */
+  private drawFan(context: DrawContext, station: StationSnapshot): void {
     const ctx = context.ctx;
-    const scale = context.projection.scale;
+    const projection = context.projection;
     const blueprint = context.frame.design.blueprint;
     const position = blueprint.blockAt(station.block).position;
-    const onSlice = position.x === context.view.slice;
     const samples = station.arcSamples;
     if (samples.length === 0) {
       return;
     }
-    const centre = samples[(samples.length - 1) >> 1];
-    const originX = context.projection.screenXAt(position.x, position.z) + scale * 0.5;
-    const originY = context.projection.screenYAt(position.x, position.y) + scale * 0.5;
-    const endZ = position.z + centre.dirZ * centre.steps;
-    const endX = context.projection.screenXAt(position.x, endZ) + scale * 0.5;
+    const onSlice = position.x === context.view.slice;
+    const originX = position.x + 0.5;
+    const originY = position.y + 0.5;
+    const originZ = position.z + 0.5;
+    const muzzleX = projection.screenX(originX, originZ);
+    const muzzleY = projection.screenY(originX, originY, originZ);
 
-    ctx.globalAlpha = onSlice ? 1 : 0.3;
-    ctx.strokeStyle = centre.clear ? "rgba(95,178,255,0.75)" : Palette.danger;
-    ctx.lineWidth = 2;
-    ctx.setLineDash(centre.clear ? [] : [4, 3]);
-    ctx.beginPath();
-    ctx.moveTo(originX, originY);
-    ctx.lineTo(endX, originY);
-    ctx.stroke();
+    ctx.globalAlpha = onSlice ? 1 : 0.45;
+    for (let i = 0; i < samples.length; i++) {
+      const sample = samples[i];
+      const endX = originX + sample.dirX * sample.steps;
+      const endZ = originZ + sample.dirZ * sample.steps;
+      ctx.strokeStyle = sample.clear ? "rgba(95,178,255,0.65)" : "rgba(255,92,92,0.8)";
+      ctx.lineWidth = sample.clear ? 1.5 : 1;
+      ctx.setLineDash(sample.clear ? [] : [4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(muzzleX, muzzleY);
+      ctx.lineTo(projection.screenX(endX, endZ), projection.screenY(endX, originY, endZ));
+      ctx.stroke();
+    }
     ctx.setLineDash([]);
+    ctx.lineWidth = 1;
 
+    const centre = samples[(samples.length - 1) >> 1];
     if (!centre.clear && centre.blockedBy >= 0) {
       const blocker = blueprint.blockAt(centre.blockedBy).position;
-      const bx = context.projection.screenXAt(blocker.x, blocker.z);
-      const by = context.projection.screenYAt(blocker.x, blocker.y);
+      CellSilhouette.trace(context, blocker.x, blocker.y, blocker.z);
       ctx.strokeStyle = Palette.danger;
       ctx.lineWidth = 2;
-      ctx.strokeRect(bx + 0.5, by + 0.5, scale - 1, scale - 1);
+      ctx.stroke();
+      ctx.lineWidth = 1;
       ctx.fillStyle = Palette.danger;
       ctx.font = "10px ui-monospace, monospace";
-      ctx.fillText("blocks the sight line", bx + scale + 4, by + scale * 0.5);
+      ctx.fillText(
+        "blocks the sight line",
+        CellSilhouette.centreX(context, blocker.x, blocker.z) + context.projection.scale,
+        CellSilhouette.centreY(context, blocker.x, blocker.y, blocker.z)
+      );
     }
 
     const label = (station.arcClearFraction * 100).toFixed(0) + "% clear";
     ctx.font = "10px ui-monospace, monospace";
     ctx.fillStyle = station.arcClearFraction < 0.5 ? Palette.danger : Palette.accent;
-    ctx.fillText(label, originX + 6, originY - 8);
-    ctx.lineWidth = 1;
+    ctx.fillText(label, muzzleX + 6, muzzleY - 8);
     ctx.globalAlpha = 1;
   }
 

@@ -1,61 +1,64 @@
-import { AttackerSnapshot, CrewSnapshot, StationSnapshot, StationStatus, isLoudStatus, stationStatusName } from "../FieldFrame";
+import { AttackerSnapshot, StationSnapshot, StationStatus, isLoudStatus, stationStatusName } from "../FieldFrame";
+import { CellSilhouette } from "../CellSilhouette";
 import { DrawContext, Layer } from "../Layer";
 import { Palette } from "../Palette";
+import { ActorPainter } from "../ActorPainter";
 
 /**
- * Everything that moves: attackers on the lane, crew in the corridors, muzzle flashes, and
- * the station status lights.
+ * The marks that must never be occluded: station status, health, focus, and the arrow for a
+ * unit still out in the lane.
  *
- * Part of the always-drawn base composition rather than an overlay, because the Run screen
- * has one job -- make it obvious why a gun is silent -- and UI spec 3.2 says dry and
- * no-path get the loudest treatment in the whole build. A tester who does not notice a
- * silent gun reads the game as cheating, which is the exact failure mode the metrics cannot
- * recover from.
+ * The actors themselves are geometry and are drawn in the sorted composition, where a
+ * runner ends up behind the wall they walk behind (isometric renderer spec 4). What is left
+ * here is the loud treatment UI spec 3.2 demands, and it draws *after* the sort and is
+ * clipped by nothing (spec 4.1) -- because the one job of the Run screen is to make it
+ * obvious why a gun is silent, and a DRY badge hidden behind a parapet is a tester deciding
+ * the game cheats.
  */
 export class ActorLayer implements Layer {
   public readonly id: string = "base";
 
   public draw(context: DrawContext): void {
-    this.drawAttackers(context);
-    this.drawStations(context);
-    this.drawCrew(context);
+    this.drawAttackerMarks(context);
+    this.drawStationMarks(context);
   }
 
-  private drawAttackers(context: DrawContext): void {
+  private drawAttackerMarks(context: DrawContext): void {
     const ctx = context.ctx;
-    const scale = context.projection.scale;
-    const attackers = context.frame.attackers;
-    for (let i = 0; i < attackers.length; i++) {
-      const unit: AttackerSnapshot = attackers[i];
-      const onSlice = unit.laneX === context.view.slice;
-      const x = context.projection.screenXAt(unit.laneX, unit.laneZ) + scale * 0.5;
-      const groundY = context.projection.screenYAt(unit.laneX, context.frame.design.pad.level);
-      const height = scale * 1.1;
-      const width = scale * 0.55;
-
-      if (x < 0) {
-        // Still out in the lane, past the left edge of the frame. Marked rather than
-        // dropped: "nothing is in range yet" and "my guns are silent" have to look
-        // different, and the view deliberately does not show all forty voxels of approach.
-        ActorLayer.offScreenMarker(context, groundY, context.frame.design.pad.minZ - unit.laneZ);
+    const frame = context.frame;
+    const level = frame.design.pad.level;
+    for (let i = 0; i < frame.attackers.length; i++) {
+      const unit: AttackerSnapshot = frame.attackers[i];
+      const x = context.projection.screenX(unit.laneX + 0.5, unit.laneZ + 0.5);
+      const head = context.projection.screenY(
+        unit.laneX + 0.5,
+        level + ActorPainter.ATTACKER_HEIGHT,
+        unit.laneZ + 0.5
+      );
+      if (x < 0 || x > context.projection.widthPx) {
+        // Still out in the lane, past the edge of the frame. Marked rather than dropped:
+        // "nothing is in range yet" and "my guns are silent" have to look different, and the
+        // view deliberately does not show all forty voxels of approach.
+        ActorLayer.offScreenMarker(
+          context,
+          context.projection.screenY(unit.laneX + 0.5, level, unit.laneZ + 0.5),
+          frame.design.pad.minZ - unit.laneZ
+        );
         continue;
       }
-
-      ctx.globalAlpha = onSlice ? 1 : 0.35;
-      ctx.fillStyle = unit.engaged ? "#d8534f" : "#9c5b57";
-      ctx.fillRect(x - width * 0.5, groundY - height, width, height);
-      // Health as a bar over the head: a unit that is nearly dead is worth one more shot.
+      const width = context.projection.scale * 0.8;
       ctx.fillStyle = "rgba(0,0,0,0.5)";
-      ctx.fillRect(x - width * 0.5, groundY - height - 6, width, 3);
+      ctx.fillRect(x - width * 0.5, head - 8, width, 3);
       ctx.fillStyle = Palette.good;
-      ctx.fillRect(x - width * 0.5, groundY - height - 6, width * unit.hpFraction, 3);
+      ctx.fillRect(x - width * 0.5, head - 8, width * unit.hpFraction, 3);
       if (unit.focused) {
         ctx.strokeStyle = Palette.accent;
         ctx.lineWidth = 2;
-        ctx.strokeRect(x - width * 0.7, groundY - height - 10, width * 1.4, height + 14);
+        ctx.beginPath();
+        ctx.arc(x, head - 14, 4, 0, Math.PI * 2);
+        ctx.stroke();
         ctx.lineWidth = 1;
       }
-      ctx.globalAlpha = 1;
     }
   }
 
@@ -75,98 +78,59 @@ export class ActorLayer implements Layer {
     ctx.fillText(distance.toFixed(0) + " out", 6 + scale * 0.45, groundY - scale * 0.45);
   }
 
-  private drawStations(context: DrawContext): void {
+  private drawStationMarks(context: DrawContext): void {
     const ctx = context.ctx;
-    const scale = context.projection.scale;
     const frame = context.frame;
     const blueprint = frame.design.blueprint;
     for (let i = 0; i < frame.stations.length; i++) {
       const station: StationSnapshot = frame.stations[i];
       const position = blueprint.blockAt(station.block).position;
-      const onSlice = position.x === context.view.slice;
-      const x = context.projection.screenXAt(position.x, position.z);
-      const y = context.projection.screenYAt(position.x, position.y);
+      const top = context.projection.screenY(position.x + 0.5, position.y + 1, position.z + 0.5);
+      const centre = CellSilhouette.centreX(context, position.x, position.z);
 
-      if (station.firedThisTick && onSlice) {
-        // Muzzle flash, pointing the way the gun faces (-z: down the lane).
-        ctx.fillStyle = "rgba(255,232,150,0.9)";
-        ctx.beginPath();
-        ctx.moveTo(x, y + scale * 0.5);
-        ctx.lineTo(x - scale * 0.7, y + scale * 0.2);
-        ctx.lineTo(x - scale * 0.7, y + scale * 0.8);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      // The rack, as a row of pips. Watching it empty is how burst-and-lull is read.
-      if (onSlice && scale >= 16) {
+      // The rack, as a row of pips over the gun. Watching it empty is how burst-and-lull is
+      // read, and it is worth reading in every section: a dry gun three sections back is
+      // still a dry gun.
+      if (context.projection.scale >= 12) {
         const pips = station.rackRounds < 6 ? station.rackRounds : 6;
         for (let p = 0; p < pips; p++) {
           ctx.fillStyle = Palette.warning;
-          ctx.fillRect(x + 4 + p * 3, y + scale - 6, 2, 4);
+          ctx.fillRect(centre - 9 + p * 3, top - 4, 2, 4);
         }
       }
 
       if (isLoudStatus(station.status) || station.status === StationStatus.Unmanned) {
-        ActorLayer.drawStatusBadge(context, station, x, y, scale, onSlice);
+        ActorLayer.drawStatusBadge(context, station, centre, top);
       }
     }
   }
 
-  /**
-   * The loud treatment: a coloured ring, a label, and -- for a severed corridor -- a slash
-   * through the route the runner can no longer walk.
-   */
+  /** The loud treatment: a ring around the cell and a label above it. */
   private static drawStatusBadge(
     context: DrawContext,
     station: StationSnapshot,
-    x: number,
-    y: number,
-    scale: number,
-    onSlice: boolean
+    centreX: number,
+    top: number
   ): void {
     const ctx = context.ctx;
+    const blueprint = context.frame.design.blueprint;
+    const position = blueprint.blockAt(station.block).position;
     const loud = isLoudStatus(station.status);
     const colour = loud ? Palette.danger : Palette.warning;
-    ctx.globalAlpha = onSlice ? 1 : 0.4;
+    CellSilhouette.trace(context, position.x, position.y, position.z);
     ctx.strokeStyle = colour;
     ctx.lineWidth = loud ? 3 : 2;
-    ctx.strokeRect(x - 1, y - 1, scale + 2, scale + 2);
-    if (loud) {
-      ctx.fillStyle = colour;
-      ctx.font = "bold 10px ui-monospace, monospace";
-      const label = stationStatusName(station.status).toUpperCase();
-      const width = ctx.measureText(label).width;
-      ctx.fillStyle = "rgba(20,10,10,0.85)";
-      ctx.fillRect(x + scale * 0.5 - width * 0.5 - 3, y - 17, width + 6, 13);
-      ctx.fillStyle = colour;
-      ctx.fillText(label, x + scale * 0.5 - width * 0.5, y - 7);
-    }
+    ctx.stroke();
     ctx.lineWidth = 1;
-    ctx.globalAlpha = 1;
-  }
-
-  private drawCrew(context: DrawContext): void {
-    const ctx = context.ctx;
-    const scale = context.projection.scale;
-    const crew = context.frame.crew;
-    for (let i = 0; i < crew.length; i++) {
-      const member: CrewSnapshot = crew[i];
-      const onSlice = Math.round(member.x) === context.view.slice;
-      const x = context.projection.screenXAt(member.x, member.z) + scale * 0.5;
-      const y = context.projection.screenYAt(member.x, member.y) + scale * 0.75;
-      ctx.globalAlpha = onSlice ? 1 : 0.3;
-      ctx.fillStyle = Palette.crewColour(member.role);
-      ctx.beginPath();
-      ctx.arc(x, y, scale * 0.18, 0, Math.PI * 2);
-      ctx.fill();
-      if (member.carrying >= 0) {
-        // A runner with a load on their back. The whole point of simulating resupply is
-        // that this shape is visible walking down a corridor that can be cut.
-        ctx.fillStyle = Palette.warning;
-        ctx.fillRect(x - scale * 0.1, y - scale * 0.34, scale * 0.2, scale * 0.14);
-      }
-      ctx.globalAlpha = 1;
+    if (!loud) {
+      return;
     }
+    ctx.font = "bold 10px ui-monospace, monospace";
+    const label = stationStatusName(station.status).toUpperCase();
+    const width = ctx.measureText(label).width;
+    ctx.fillStyle = "rgba(20,10,10,0.85)";
+    ctx.fillRect(centreX - width * 0.5 - 3, top - 24, width + 6, 13);
+    ctx.fillStyle = colour;
+    ctx.fillText(label, centreX - width * 0.5, top - 14);
   }
 }

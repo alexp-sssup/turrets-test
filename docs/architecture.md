@@ -23,7 +23,8 @@ src/
   persistence/  Blueprint library that survives between runs.
   app/          Headless CLI harness. The only file I/O and the only console output.
 
-  render/       Canvas layers, the frame snapshot, predictive analysis. Browser only.
+  render/       The isometric projection, the depth-sorted composition, canvas layers, the
+                frame snapshot, predictive analysis. Browser only.
   ui/           DOM panels, the input dispatcher, the screens. Browser only.
   telemetry/    Per-attempt metrics and the export format. No I/O, no clock of its own.
   data/         dials.json and the worked examples.
@@ -45,6 +46,12 @@ and `structure` knows nothing about waves.
 | §1.1 Solver | `structure/StructuralSolver` |
 | §1.2 Replay | `sim/ReplayRecorder` |
 | §7 Recoil | `structure/LoadSet` + `sim/WeaponSystem` |
+| Isometric renderer §2 projection | `render/IsoProjection`, `render/ViewYaw`, `render/ZoomLadder` |
+| Isometric renderer §3-4 voxels and the sort | `render/VoxelFaces`, `render/VoxelPainter`, `render/DrawList`, `render/FieldComposition` |
+| Isometric renderer §5 picking | `render/CellPick`, `render/Projection` |
+| Isometric renderer §6 the peel | `render/PeelPlane`, `render/SectionCue` |
+| Isometric renderer §7 the scene | `render/ScenePainter`, `render/ActorPainter` |
+| Isometric renderer §8 budget | `render/StructureCache`, `render/DetailLevel` |
 
 ## The structural solver
 

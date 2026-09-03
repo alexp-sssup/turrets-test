@@ -53,8 +53,11 @@ export class Telemetry {
   private currentAttempt: AttemptRecord | null;
   private overlay: OverlayMode;
   private overlaySinceMs: number;
-  /** Whether the depth view is the one on screen, for the dwell of depth view spec 8. */
-  private depthView: boolean;
+  /** Whether a cutaway is engaged, for the run-with-peel dwell of isometric renderer spec 11. */
+  private peeling: boolean;
+  /** The zoom rung on screen, and which rungs have been visited, as a bitmask. */
+  private zoomRung: number;
+  private zoomRungsSeen: number;
   private running: boolean;
   private replayWatchedAtMs: number;
   private lastFirstFailedJoint: JointRef | null;
@@ -68,7 +71,9 @@ export class Telemetry {
     // -1 rather than 0: a clock that legitimately starts at zero must not be mistaken for
     // an unset one, or the first interval of every session goes uncharged.
     this.overlaySinceMs = -1;
-    this.depthView = false;
+    this.peeling = false;
+    this.zoomRung = -1;
+    this.zoomRungsSeen = 0;
     this.running = false;
     this.replayWatchedAtMs = 0;
     this.lastFirstFailedJoint = null;
@@ -148,20 +153,73 @@ export class Telemetry {
   }
 
   /**
-   * Charges the outgoing view mode and starts the clock on the incoming one
-   * (depth view spec 8).
+   * A quarter turn (isometric renderer spec 2.2, spec 11).
    *
-   * Same shape as `noteOverlay` and on the same clock, because the two questions are asked
-   * together: an overlay a tester read in the depth view and an overlay they read flat are
-   * not the same reading.
+   * Counted rather than timed, because the question is whether the camera is turned at all
+   * and whether it is turned *before* the wave -- a camera turned only after the turret has
+   * fallen over is a sightseeing tool, not a diagnosis one.
    */
-  public noteViewMode(depthView: boolean, nowMs: number): void {
+  public noteYaw(nowMs: number): void {
     this.chargeDwell(nowMs);
-    this.depthView = depthView;
     const record = this.currentAttempt;
-    if (depthView && !this.running && record !== null) {
-      record.depthViewOpenedBeforeRun = true;
+    if (record === null) {
+      return;
     }
+    record.yawChanges += 1;
+    if (!this.running) {
+      record.yawChangedBeforeRun = true;
+    }
+  }
+
+  /**
+   * The build plane moved, and therefore the cutaway (spec 6, spec 11).
+   *
+   * Design and Run are counted apart on purpose: the same keystroke means "let me reach in
+   * and build" on one screen and "let me see why that failed" on the other, and pooling them
+   * would answer neither question.
+   */
+  public notePeelMove(): void {
+    const record = this.currentAttempt;
+    if (record === null) {
+      return;
+    }
+    if (this.running) {
+      record.peelMovesInRun += 1;
+      return;
+    }
+    record.peelMovesInDesign += 1;
+  }
+
+  /** Whether a cutaway is engaged. Charges the interval before it changes. */
+  public notePeel(peeling: boolean, nowMs: number): void {
+    this.chargeDwell(nowMs);
+    this.peeling = peeling;
+  }
+
+  /**
+   * The zoom rung on screen (spec 2.3, spec 11).
+   *
+   * `rung` is an index into the ladder, so "was this read at the floor rung" is a comparison
+   * rather than a float test, and the set of rungs a tester visited is a bitmask.
+   */
+  public noteZoom(rung: number, nowMs: number): void {
+    this.chargeDwell(nowMs);
+    this.zoomRung = rung;
+    this.zoomRungsSeen |= 1 << rung;
+    const record = this.currentAttempt;
+    if (record !== null) {
+      record.zoomRungsUsed = Telemetry.bitCount(this.zoomRungsSeen);
+    }
+  }
+
+  private static bitCount(mask: number): number {
+    let count = 0;
+    let bits = mask;
+    while (bits !== 0) {
+      count += bits & 1;
+      bits >>>= 1;
+    }
+    return count;
   }
 
   public noteReplayOpened(nowMs: number): void {
@@ -232,14 +290,17 @@ export class Telemetry {
     );
   }
 
-  /** Charges the interval since the last boundary to the overlay and the mode it was read in. */
+  /** Charges the interval since the last boundary to the overlay, the peel and the zoom. */
   private chargeDwell(nowMs: number): void {
     const record = this.currentAttempt;
     if (record !== null && this.overlaySinceMs >= 0 && nowMs > this.overlaySinceMs) {
       const seconds = (nowMs - this.overlaySinceMs) / 1000;
       record.overlayDwell.add(this.overlay, seconds, this.running);
-      if (this.depthView) {
-        record.depthViewSeconds += seconds;
+      if (this.running && this.peeling) {
+        record.runSecondsWithPeel += seconds;
+      }
+      if (this.zoomRung === 0) {
+        record.secondsAtFloorRung += seconds;
       }
     }
     this.overlaySinceMs = nowMs;

@@ -7,10 +7,11 @@ import { OverlayMode, overlayName } from "../ViewState";
 /**
  * Station-to-depot routes, round-trip times and runners on the move.
  *
- * This overlay is the reason the 2D cross-section pays for itself (UI spec 2): the resupply
- * model only earns its cost if a tester can watch a runner walk a corridor and then watch
- * that corridor get cut. In this projection that is the default view -- no cutaway mode, no
- * transparency, no camera to learn.
+ * The resupply model of the prototype spec 4.3 only earns its cost if a tester can watch a
+ * runner walk a corridor and then watch that corridor get cut. In the isometric view the
+ * route is drawn as the three-dimensional thing it is: a leg that steps sideways in x goes
+ * visibly round the back of a wall instead of becoming a dashed stub in a cross-section
+ * that cannot hold it (isometric renderer spec 1).
  *
  * The route drawn is the one the pathfinder actually returned and the one the round-trip
  * time was costed from, not an illustration of it. When a station has no route the line is
@@ -32,8 +33,12 @@ export class LogisticsLayer implements Layer {
     const scale = context.projection.scale;
     const blueprint = context.frame.design.blueprint;
     const stationPosition = blueprint.blockAt(station.block).position;
-    const anchorX = context.projection.screenXAt(stationPosition.x, stationPosition.z) + scale * 0.5;
-    const anchorY = context.projection.screenYAt(stationPosition.x, stationPosition.y) + scale * 0.5;
+    const anchorX = context.projection.screenX(stationPosition.x + 0.5, stationPosition.z + 0.5);
+    const anchorY = context.projection.screenY(
+      stationPosition.x + 0.5,
+      stationPosition.y + 0.5,
+      stationPosition.z + 0.5
+    );
 
     const path = station.depotPath;
     if (path === null || station.status === StationStatus.NoPath) {
@@ -67,7 +72,7 @@ export class LogisticsLayer implements Layer {
 
   private static drawPath(context: DrawContext, path: Path): void {
     const ctx = context.ctx;
-    const scale = context.projection.scale;
+    const projection = context.projection;
     const slice = context.view.slice;
     ctx.lineWidth = 2;
     ctx.lineJoin = "round";
@@ -75,18 +80,21 @@ export class LogisticsLayer implements Layer {
       const from = path.cellAt(i);
       const to = path.cellAt(i + 1);
       const onSlice = from.x === slice && to.x === slice;
-      // A leg that leaves the drawn cross-section is dashed: the corridor is real, it just
-      // is not in this slice, and pretending otherwise would misreport the route's shape.
-      ctx.strokeStyle = onSlice ? "rgba(255,209,102,0.9)" : "rgba(255,209,102,0.35)";
-      ctx.setLineDash(onSlice ? [] : [3, 3]);
+      // In the flat dev view a leg that leaves the drawn cross-section is dashed: the
+      // corridor is real, it just is not in that slice, and pretending otherwise would
+      // misreport the route's shape. The isometric view has a place for it and needs no
+      // apology.
+      const dashed = !projection.isIso && !onSlice;
+      ctx.strokeStyle = dashed ? "rgba(255,209,102,0.35)" : "rgba(255,209,102,0.9)";
+      ctx.setLineDash(dashed ? [3, 3] : []);
       ctx.beginPath();
       ctx.moveTo(
-        context.projection.screenXAt(from.x, from.z) + scale * 0.5,
-        context.projection.screenYAt(from.x, from.y) + scale * 0.5
+        projection.screenX(from.x + 0.5, from.z + 0.5),
+        projection.screenY(from.x + 0.5, from.y + 0.5, from.z + 0.5)
       );
       ctx.lineTo(
-        context.projection.screenXAt(to.x, to.z) + scale * 0.5,
-        context.projection.screenYAt(to.x, to.y) + scale * 0.5
+        projection.screenX(to.x + 0.5, to.z + 0.5),
+        projection.screenY(to.x + 0.5, to.y + 0.5, to.z + 0.5)
       );
       ctx.stroke();
     }
@@ -97,8 +105,8 @@ export class LogisticsLayer implements Layer {
     ctx.fillStyle = Palette.warning;
     ctx.beginPath();
     ctx.arc(
-      context.projection.screenXAt(end.x, end.z) + scale * 0.5,
-      context.projection.screenYAt(end.x, end.y) + scale * 0.5,
+      projection.screenX(end.x + 0.5, end.z + 0.5),
+      projection.screenY(end.x + 0.5, end.y + 0.5, end.z + 0.5),
       3,
       0,
       Math.PI * 2
@@ -114,22 +122,28 @@ export class LogisticsLayer implements Layer {
     for (let i = 0; i < frame.depots.length; i++) {
       const depot = frame.depots[i];
       const position = blueprint.blockAt(depot.block).position;
-      const x = context.projection.screenXAt(position.x, position.z);
-      const y = context.projection.screenYAt(position.x, position.y);
+      const centreX = context.projection.screenX(position.x + 0.5, position.z + 0.5);
+      const top = context.projection.screenY(position.x + 0.5, position.y + 1, position.z + 0.5);
       const onSlice = position.x === context.view.slice;
-      ctx.globalAlpha = onSlice ? 1 : 0.35;
+      ctx.globalAlpha = onSlice ? 1 : 0.55;
 
-      // Fill level as a bar, and the cook-off radius as a ring when a neighbour is inside
-      // it: "depot dispersal is two-sided" made visible.
+      // Fill level as a bar over the block, and the cook-off radius as a ring on the block's
+      // own level when a neighbour is inside it: "depot dispersal is two-sided" made visible.
+      const width = scale * 1.2;
       ctx.fillStyle = "rgba(12,16,22,0.8)";
-      ctx.fillRect(x, y - 8, scale, 6);
+      ctx.fillRect(centreX - width * 0.5, top - 10, width, 6);
       ctx.fillStyle = Palette.warning;
-      ctx.fillRect(x, y - 8, scale * depot.fillFraction, 6);
+      ctx.fillRect(centreX - width * 0.5, top - 10, width * depot.fillFraction, 6);
       if (depot.chainDistance <= 1) {
+        const centreY = context.projection.screenY(
+          position.x + 0.5,
+          position.y + 0.5,
+          position.z + 0.5
+        );
         ctx.strokeStyle = Palette.danger;
         ctx.setLineDash([2, 2]);
         ctx.beginPath();
-        ctx.arc(x + scale * 0.5, y + scale * 0.5, scale * 1.5, 0, Math.PI * 2);
+        ctx.ellipse(centreX, centreY, scale * 2.2, scale * 1.1, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
       }

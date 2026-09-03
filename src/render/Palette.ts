@@ -37,7 +37,7 @@ export class UtilizationBand {
  */
 export class Palette {
   public static readonly background: string = "#12151b";
-  public static readonly pad: string = "#1d2430";
+  public static readonly pad: string = "#2a3444";
   /** The floor between the nearest section and the farthest, in the depth view. */
   public static readonly groundPlane: string = "#171d27";
   public static readonly padLine: string = "#2b3542";
@@ -77,32 +77,56 @@ export class Palette {
   }
 
   /**
-   * The cube faces of the depth view (depth view spec 2).
+   * The ground the scene stands on (isometric renderer spec 7).
    *
-   * Shaded off the material's own colour by **luminance only** -- the top face lightened,
-   * the receding side darkened -- because depth view spec 4.4 keeps hue free for the things
-   * that encode on it. A wood cube and a stone cube stay a wood cube and a stone cube in
-   * greyscale, and the utilization ramp drawn over them is untouched.
+   * Two tile shades and an accent every four voxels, so distance along the lane is
+   * countable without measuring pixels -- a grid *on the ground* rather than over the
+   * picture, which is what the flat view's screen-space grid was.
    */
-  public static readonly TOP_FACE_LIGHT: number = 0.26;
-  public static readonly SIDE_FACE_SHADE: number = 0.34;
-
-  public static topFaceFill(material: MaterialId): string {
-    return Palette.shade(Palette.materialFill(material), Palette.TOP_FACE_LIGHT);
-  }
-
-  public static sideFaceFill(material: MaterialId): string {
-    return Palette.shade(Palette.materialFill(material), -Palette.SIDE_FACE_SHADE);
-  }
-
-  /** The outline a peeled section is drawn with: the cut wall in front of the working plane. */
+  public static readonly groundTile: string = "#1e2531";
+  public static readonly groundTileAlt: string = "#1a212c";
+  public static readonly groundAccent: string = "rgba(139,152,171,0.16)";
+  /** Contact shadows, which spec 7.3 makes mandatory: without them an actor floats. */
+  public static readonly shadow: string = "rgba(6,8,11,0.45)";
+  /** The build plane a click resolves in (spec 5.3), drawn so placement is not a guess. */
+  public static readonly buildPlane: string = "rgba(95,178,255,0.06)";
+  public static readonly buildPlaneLine: string = "rgba(95,178,255,0.22)";
+  /** The outline a peeled section is drawn with: the wall cut away in front of the plane. */
   public static readonly peelEdge: string = "#9fb0c6";
+  /** The darker edge stroked along a silhouette or a crease (spec 3.1). */
+  public static readonly voxelEdge: string = "rgba(9,11,15,0.55)";
 
   /** Lightens (positive) or darkens (negative) a `#rrggbb` colour, keeping its hue. */
   public static shade(hex: string, amount: number): string {
-    const red = Palette.channel(hex, 1, amount);
-    const green = Palette.channel(hex, 3, amount);
-    const blue = Palette.channel(hex, 5, amount);
+    return Palette.rgb(
+      Palette.channel(hex, 1, amount),
+      Palette.channel(hex, 3, amount),
+      Palette.channel(hex, 5, amount)
+    );
+  }
+
+  /**
+   * A face fill: the material's own colour, shaded for the face and mixed toward the
+   * background for depth (isometric renderer spec 3, spec 6).
+   *
+   * Shading is **luminance only** and dimming is a mix toward the background rather than an
+   * alpha, because a solid cell drawn translucent would make its luminance a function of how
+   * many cells sat behind it -- the exact failure UI spec 4 forbids and spec 6.1 rejects an
+   * x-ray mode over. Hue stays free for the things that encode on it, so a wood cube and a
+   * stone cube stay distinguishable in greyscale at every depth.
+   */
+  public static faceFill(material: MaterialId, shade: number, dim: number): string {
+    return Palette.dimmed(Palette.materialFill(material), shade, dim);
+  }
+
+  public static dimmed(hex: string, shade: number, dim: number): string {
+    const red = Palette.toBackground(Palette.channel(hex, 1, shade), 1, dim);
+    const green = Palette.toBackground(Palette.channel(hex, 3, shade), 3, dim);
+    const blue = Palette.toBackground(Palette.channel(hex, 5, shade), 5, dim);
+    return Palette.rgb(red, green, blue);
+  }
+
+  private static rgb(red: number, green: number, blue: number): string {
     return "rgb(" + red.toString() + "," + green.toString() + "," + blue.toString() + ")";
   }
 
@@ -110,8 +134,19 @@ export class Palette {
     const value = Number.parseInt(hex.substring(at, at + 2), 16);
     const target = amount >= 0 ? 255 : 0;
     const scaled = amount >= 0 ? amount : -amount;
-    const mixed = Math.round(value + (target - value) * scaled);
-    return mixed < 0 ? 0 : mixed > 255 ? 255 : mixed;
+    return Palette.clampChannel(Math.round(value + (target - value) * scaled));
+  }
+
+  private static toBackground(value: number, at: number, amount: number): number {
+    if (amount <= 0) {
+      return value;
+    }
+    const target = Number.parseInt(Palette.background.substring(at, at + 2), 16);
+    return Palette.clampChannel(Math.round(value + (target - value) * amount));
+  }
+
+  private static clampChannel(value: number): number {
+    return value < 0 ? 0 : value > 255 ? 255 : value;
   }
 
   /** Kind badges. Structural blocks get none: the material colour is the whole story. */
@@ -147,15 +182,35 @@ export class Palette {
     return "";
   }
 
-  /** Fire, as a two-stop ramp from ignition to consumed. */
-  public static fireFill(intensity: number): string {
+  /**
+   * Fire, as a two-stop ramp from ignition to consumed.
+   *
+   * Returned as a `#rrggbb` hex because the face shading of the isometric renderer spec 3
+   * shades off a hex, and fire is the one thing allowed to break the luminance-only rule: a
+   * burning block is a hue statement.
+   */
+  public static fireHex(intensity: number): string {
     const clamped = intensity < 0 ? 0 : intensity > 1 ? 1 : intensity;
     const red = Math.round(200 + 55 * clamped);
     const green = Math.round(120 - 70 * clamped);
-    return "rgb(" + red.toString() + "," + green.toString() + ",40)";
+    return "#" + Palette.hexByte(red) + Palette.hexByte(green) + Palette.hexByte(40);
+  }
+
+  public static fireFill(intensity: number): string {
+    return Palette.fireHex(intensity);
+  }
+
+  private static hexByte(value: number): string {
+    const clamped = Palette.clampChannel(Math.round(value));
+    return (clamped < 16 ? "0" : "") + clamped.toString(16);
   }
 
   public static crewColour(role: number): string {
+    return Palette.crewHex(role);
+  }
+
+  /** Crew by role, as a hex the face shading can work off. */
+  public static crewHex(role: number): string {
     if (role === 1) {
       return "#5fb2ff";
     }

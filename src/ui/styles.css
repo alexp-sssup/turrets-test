@@ -837,14 +837,21 @@ ul.library-list li {
   color: var(--accent);
 }
 
-/* Depth view spec 5: the toggle reads as on, so the mode is legible without pressing it. */
-.field-button.view-mode {
-  font-variant-numeric: tabular-nums;
-  min-width: 44px;
+/* Isometric renderer spec 9: the compass names the yaw that is on, so which way the camera
+   faces is legible without pressing anything. */
+.yaw-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
 }
 
-.field-button.view-mode.active {
-  border-color: var(--accent);
+.yaw-readout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  font: 13px/1 var(--mono);
   color: var(--accent);
 }
 
@@ -1319,4 +1326,15 @@ ul.library-list li {
 
 :root[data-layout="compact"] .palette {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Isometric renderer spec 9: the flat view's only door, in the dev readout. */
+.dev-item.dev-toggle {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font: inherit;
+  padding: 1px 6px;
 }

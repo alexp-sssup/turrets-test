@@ -11,6 +11,9 @@ What is here so far:
   browser tester build on top of it.
 - [`20260903-mobile-ui.md`](20260903-mobile-ui.md) — touch and small screens, extending
   that one.
+- [`20260903-depth-view.md`](20260903-depth-view.md) — the optional 2.5D depth view over
+  the same scene, and how a multilayer turret is read from the inside. Amends §2 of the
+  UI spec.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

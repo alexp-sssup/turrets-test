@@ -22,6 +22,8 @@ A second requirement comes from putting this in front of testers rather than the
 
 **The tester build is a side-on 2D voxel cross-section, not 3D.** This is a deliberate deviation from the voxel framing in v0.2, taken for the prototype only.
 
+> **Amended by [20260903-depth-view.md](20260903-depth-view.md).** The cross-section is now the *default* view rather than the only one: an optional fixed-camera 2.5D depth view draws the same scene with the x axis given a place on screen. Everything below still holds — it is one projection over the same layer registry, there is still no camera to learn, and `sim/` and `structure/` are still untouched.
+
 Everything P0 tests exists in two dimensions: load paths under gravity, joint utilization, tension vs. compression, fire flowing down through contiguous wood, firing arcs, crew paths, and haul round trips.
 
 What 2D buys, all of it directly serving the hypotheses:
@@ -52,6 +54,7 @@ Four screens and one persistent shell. The loop is Design → Allocate → Run �
 | Map / node selection | **[out]** | P2 |
 | Opponent view, spectator | **[out]** | P1 |
 | Touch / mobile layout | **[in]** | One build, responsive; see [20260903-mobile-ui.md](20260903-mobile-ui.md) |
+| 2.5D depth view | **[in]** | Optional, additive, flat stays default; see [20260903-depth-view.md](20260903-depth-view.md) |
 | Art, audio, VFX polish | **[out]** | Legibility over fidelity everywhere |
 
 ### 3.1 Design

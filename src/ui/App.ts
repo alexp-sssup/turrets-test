@@ -11,7 +11,7 @@ import { BlueprintValidator } from "../editor/BlueprintValidator";
 import { BlueprintCodec } from "../persistence/BlueprintCodec";
 import { BlueprintLibrary } from "../persistence/BlueprintLibrary";
 import { FieldDesign } from "../render/FieldDesign";
-import { FieldFrame } from "../render/FieldFrame";
+import { FieldFrame, isLoudStatus } from "../render/FieldFrame";
 import { FieldRenderer } from "../render/FieldRenderer";
 import { FrameBuilder } from "../render/FrameBuilder";
 import { PredictAnalysis, PredictOutcome } from "../render/PredictAnalysis";
@@ -27,13 +27,20 @@ import { Telemetry } from "../telemetry/Telemetry";
 import { DialsTable } from "../data/DialsTable";
 import { WorkedExample, WorkedExamples } from "../data/WorkedExamples";
 import { AttemptSession } from "./AttemptSession";
-import { Dispatcher, SimCommand, SimTarget, ViewCommand } from "./Commands";
+import { Dispatcher, FitTarget, SimCommand, SimTarget, ViewCommand } from "./Commands";
 import { DesignPanels } from "./DesignPanels";
 import { Dom } from "./Dom";
 import { EditorModel } from "./EditorModel";
 import { LocalSessionStore } from "./LocalSessionStore";
+import { FieldControls } from "./FieldControls";
+import { GestureIntent, GestureKind } from "./GestureIntent";
+import { GesturePhase, GestureRecognizer } from "./GestureRecognizer";
+import { LayoutMode, layoutModeName, pointerKindName } from "./LayoutMode";
+import { PanelGroup, PanelSheet } from "./PanelSheet";
 import { ChainRow, RunPanels } from "./RunPanels";
-import { Shell, ShellState } from "./Shell";
+import { Shell } from "./Shell";
+import { ShellState } from "./ShellState";
+import { Viewport } from "./Viewport";
 
 /** The five screens plus the library stub. The loop is design → allocate → run → replay. */
 export enum Screen {
@@ -56,7 +63,7 @@ const ATTEMPT_SEED: number = 20260902;
  * three things in order: advance playback, spend a slice of the frame simulating ahead, and
  * draw. Panels repaint on state changes and at ten hertz at most, never per frame.
  */
-export class App implements SimTarget {
+export class App implements SimTarget, FitTarget {
   private readonly dials: Dials;
   private readonly arena: Arena;
   private readonly materials: MaterialTable;
@@ -71,7 +78,13 @@ export class App implements SimTarget {
   private readonly canvas: HTMLCanvasElement;
   private readonly panelRoot: HTMLElement;
   private readonly bannerRoot: HTMLElement;
+  private readonly controlsRoot: HTMLElement;
+  private readonly sheetTabsRoot: HTMLElement;
+  private readonly hintRoot: HTMLElement;
   private readonly shell: Shell;
+  private readonly viewport: Viewport;
+  private readonly sheet: PanelSheet;
+  private readonly recognizer: GestureRecognizer;
   private readonly dispatcher: Dispatcher;
   private readonly editor: EditorModel;
   private readonly predictAnalysis: PredictAnalysis;
@@ -98,6 +111,32 @@ export class App implements SimTarget {
   private guided: boolean;
   private banner: string;
   private importText: string;
+  private devExpanded: boolean;
+  private slicePickerOpen: boolean;
+  /**
+   * Whether the tap that opened a double-tap pair actually placed a cell (mobile UI spec
+   * 6.2). A gesture the tester meant as a view change must not leave an edit behind.
+   */
+  private lastTapPlaced: boolean;
+  /** The 9.1 device fields. Counted per attempt, and reset when one opens. */
+  private keyboardUsed: boolean;
+  private gestureTaps: number;
+  private gestureDrags: number;
+  private gestureLongPresses: number;
+  private gesturePinches: number;
+  private gestureDoubleTaps: number;
+  private orientationBase: number;
+  /**
+   * The markup the chrome last had.
+   *
+   * The control bar and the tab bar repaint on the shell's ten-hertz clock, and rewriting
+   * them when nothing changed would replace the node under a thumb that is halfway through
+   * pressing it. The shell already takes this care with its overlay row; a bar that is only
+   * reachable by touch needs it more.
+   */
+  private lastControlsHtml: string;
+  private lastTabsHtml: string;
+  private lastHintHtml: string;
 
   public constructor(canvas: HTMLCanvasElement, panelRoot: HTMLElement, shellRoot: HTMLElement) {
     this.dials = DialsTable.load();
@@ -112,8 +151,18 @@ export class App implements SimTarget {
     this.canvas = canvas;
     this.panelRoot = panelRoot;
     this.bannerRoot = Dom.require("banner");
+    this.controlsRoot = Dom.require("field-controls");
+    this.sheetTabsRoot = Dom.require("sheet-tabs");
+    this.hintRoot = Dom.require("field-hint");
     this.renderer = new FieldRenderer(canvas);
     this.shell = new Shell(shellRoot);
+    this.viewport = new Viewport(document.documentElement, (): void => {
+      // A mode change repaints everything: the shell condenses, the overlay keys move to
+      // the control bar and the sheet appears or goes away (mobile UI spec 4.2-4.4).
+      this.panelDirty = true;
+    });
+    this.sheet = new PanelSheet();
+    this.recognizer = new GestureRecognizer();
     this.predictAnalysis = new PredictAnalysis(this.materials, this.dials, this.arena.pad);
     this.library = App.readLibrary(this.store);
 
@@ -149,13 +198,28 @@ export class App implements SimTarget {
     this.runners = 2;
     this.banner = "";
     this.importText = "";
+    this.devExpanded = false;
+    this.slicePickerOpen = false;
+    this.lastTapPlaced = false;
+    this.keyboardUsed = false;
+    this.gestureTaps = 0;
+    this.gestureDrags = 0;
+    this.gestureLongPresses = 0;
+    this.gesturePinches = 0;
+    this.gestureDoubleTaps = 0;
+    this.orientationBase = this.viewport.orientationChanges;
+    this.lastControlsHtml = "";
+    this.lastTabsHtml = "";
+    this.lastHintHtml = "";
 
-    this.dispatcher = new Dispatcher(this, this.view, this, (mode: OverlayMode): void => {
+    this.dispatcher = new Dispatcher(this, this.view, this, this, (mode: OverlayMode): void => {
       this.telemetry.noteOverlay(mode, App.now());
       this.panelDirty = true;
     });
 
     this.wireInput();
+    this.viewport.start();
+    this.syncSheetTabs();
     this.renderer.resize();
     Projection.fit(this.designDesign, this.view, this.renderer.width, this.renderer.height);
     if (this.guided) {
@@ -256,8 +320,12 @@ export class App implements SimTarget {
     this.lastFrameMs = now;
 
     if (this.renderer.resize()) {
-      Projection.fit(this.currentDesign(), this.view, this.renderer.width, this.renderer.height);
+      this.fitView();
     }
+    // The long-press hold is the one threshold that fires without an event to hang it on,
+    // so the frame clock advances it (mobile UI spec 6.2, 7.3).
+    this.recognizer.tick(now);
+    this.pumpGestures();
 
     const attempt = this.attempt;
     if (attempt !== null && this.screen === Screen.Run) {
@@ -305,9 +373,21 @@ export class App implements SimTarget {
     // a tester can read. Rewriting it every frame would put sixty DOM writes a second next
     // to a canvas whose whole job is to be measured at sixty frames a second.
     if (dirty || now - this.lastShellMs > 100) {
-      this.shell.render(this.shellState(frame));
+      const state = this.shellState(frame);
+      this.shell.render(state);
+      this.renderChrome(state, frame);
       this.lastShellMs = now;
     }
+  }
+
+  /**
+   * `ViewCommand.fit` (mobile UI spec 7.1): frames the design in the viewport.
+   *
+   * A view command, never logged, and it exists because a pinch-zoomed tester needs a way
+   * back that is not "reload the page".
+   */
+  public fitView(): void {
+    Projection.fit(this.currentDesign(), this.view, this.renderer.width, this.renderer.height);
   }
 
   private currentDesign(): FieldDesign {
@@ -450,6 +530,7 @@ export class App implements SimTarget {
       return;
     }
     attempt.assign(this.repairDetails, this.runners);
+    this.noteDeviceAtWaveStart(attempt);
     if (resuming) {
       attempt.resumeNextWave();
     } else {
@@ -490,7 +571,45 @@ export class App implements SimTarget {
     );
     this.view.clearJointHighlight();
     this.view.slice = App.sliceOfInterest(blueprint, this.arena.laneCentreX);
+    // 9.1 is per attempt, so the counters start again with the attempt.
+    this.keyboardUsed = false;
+    this.gestureTaps = 0;
+    this.gestureDrags = 0;
+    this.gestureLongPresses = 0;
+    this.gesturePinches = 0;
+    this.gestureDoubleTaps = 0;
+    this.orientationBase = this.viewport.orientationChanges;
     this.panelDirty = true;
+  }
+
+  /**
+   * Closes an attempt's record: the 9.1 device counts first, then everything the run
+   * produced.
+   *
+   * The counts are per attempt and the layout is not among them -- `layoutMode`,
+   * `pointerKind` and the viewport are pinned by `noteDeviceAtWaveStart` at the moment 9.1
+   * asks for, which is when the wave started, not when it ended.
+   */
+  private writeAttemptRecord(attempt: AttemptSession): void {
+    const device = attempt.record.device;
+    device.orientationChanges = this.viewport.orientationChanges - this.orientationBase;
+    device.keyboardUsed = this.keyboardUsed;
+    device.taps = this.gestureTaps;
+    device.drags = this.gestureDrags;
+    device.longPresses = this.gestureLongPresses;
+    device.pinches = this.gesturePinches;
+    device.doubleTaps = this.gestureDoubleTaps;
+    attempt.writeRecord(this.renderer.renderP95());
+  }
+
+  /** 9.1: the layout and the pointer as they were at the moment the wave started. */
+  private noteDeviceAtWaveStart(attempt: AttemptSession): void {
+    const device = attempt.record.device;
+    device.layoutMode = layoutModeName(this.viewport.mode);
+    device.pointerKind = pointerKindName(this.viewport.pointer);
+    device.viewportW = this.viewport.widthPx;
+    device.viewportH = this.viewport.heightPx;
+    device.devicePixelRatio = this.viewport.devicePixelRatio;
   }
 
   private finishAttempt(): void {
@@ -498,7 +617,7 @@ export class App implements SimTarget {
     if (attempt === null) {
       return;
     }
-    attempt.writeRecord(this.renderer.renderP95());
+    this.writeAttemptRecord(attempt);
     this.telemetry.finishAttempt(
       attempt.record.outcome,
       attempt.record.firstFailedJoint,
@@ -518,7 +637,7 @@ export class App implements SimTarget {
   private abandonAttempt(): void {
     const attempt = this.attempt;
     if (attempt !== null && attempt.started && !attempt.finished) {
-      attempt.writeRecord(this.renderer.renderP95());
+      this.writeAttemptRecord(attempt);
       this.telemetry.finishAttempt(
         AttemptOutcome.Lost,
         attempt.record.firstFailedJoint,
@@ -553,6 +672,9 @@ export class App implements SimTarget {
         ? "Nothing sheared this time. Scrub the timeline to see what did happen."
         : "That is the joint that went first. The button out of here is “fix this blueprint”.";
     this.goTo(Screen.Replay);
+    // 8.4: the replay opens with the chain tab selected and the first-failed-joint callout
+    // above the fold. It is the answer the tester came for; it does not get scrolled to.
+    this.sheet.select(PanelGroup.Chain);
   }
 
   /** The frame the first structural failure landed on, or 0. */
@@ -604,11 +726,57 @@ export class App implements SimTarget {
     this.telemetry.noteRunning(false, App.now());
     this.banner = "";
     this.goTo(Screen.Design);
+    // 8.4: "fix this blueprint" lands on Design with the sheet open on the inspector and
+    // the stress overlay already selected in the control bar.
+    this.sheet.select(PanelGroup.Inspector);
+  }
+
+  /**
+   * Points the tab bar at the current screen's panel groups (mobile UI spec 4.3).
+   *
+   * The groups are the existing panels, not new ones. Allocate, Summary and Library are one
+   * panel each, so they get no tab bar and every panel shows -- a sheet is for choosing
+   * between panels, and there is nothing to choose between.
+   */
+  private syncSheetTabs(): void {
+    if (this.screen === Screen.Design) {
+      this.sheet.setTabs([
+        PanelGroup.Palette,
+        PanelGroup.Bill,
+        PanelGroup.Validation,
+        PanelGroup.Inspector,
+      ]);
+      return;
+    }
+    if (this.screen === Screen.Run) {
+      this.sheet.setTabs([
+        PanelGroup.Wave,
+        PanelGroup.Stations,
+        PanelGroup.Depots,
+        PanelGroup.Crew,
+        PanelGroup.Lane,
+      ]);
+      return;
+    }
+    if (this.screen === Screen.Replay) {
+      this.sheet.setTabs([
+        PanelGroup.Wave,
+        PanelGroup.Stations,
+        PanelGroup.Depots,
+        PanelGroup.Crew,
+        PanelGroup.Lane,
+        PanelGroup.Chain,
+      ]);
+      return;
+    }
+    this.sheet.setTabs([]);
   }
 
   private goTo(screen: Screen): void {
     this.screen = screen;
     this.panelDirty = true;
+    this.slicePickerOpen = false;
+    this.syncSheetTabs();
     if (screen === Screen.Design || screen === Screen.Library) {
       this.telemetry.noteRunning(false, App.now());
     }
@@ -641,7 +809,8 @@ export class App implements SimTarget {
           this.ammo,
           this.view.selected,
           this.view.overlay,
-          this.renderer.predict.current
+          this.renderer.predict.current,
+          this.viewport.coarse
         )
       );
       return;
@@ -666,14 +835,17 @@ export class App implements SimTarget {
     }
     const attempt = this.attempt;
     if (attempt === null) {
-      Dom.setHtml(this.panelRoot, '<section class="panel"><p>no attempt open.</p></section>');
+      Dom.setHtml(
+        this.panelRoot,
+        '<section class="panel" data-group="always"><p>no attempt open.</p></section>'
+      );
       return;
     }
     if (this.screen === Screen.Run) {
       if (!attempt.started) {
         Dom.setHtml(
           this.panelRoot,
-          '<section class="panel"><h2>ready</h2><p class="hint">' +
+          '<section class="panel" data-group="always"><h2>ready</h2><p class="hint">' +
             Dom.escape(attempt.blueprint.name) +
             " is on the pad. five scripted waves, identical every run.</p>" +
             '<div class="button-row"><button class="primary" data-action="start">start wave 1</button>' +
@@ -711,7 +883,8 @@ export class App implements SimTarget {
           attempt.record.firstFailedJoint,
           this.firstFailureFrame()
         ) +
-          '<section class="panel actions"><button class="primary" data-action="fix">' +
+          '<section class="panel actions" data-group="always">' +
+          '<button class="primary" data-action="fix">' +
           "fix this blueprint →</button>" +
           '<button data-action="summary">run summary</button></section>'
       );
@@ -721,6 +894,62 @@ export class App implements SimTarget {
       this.panelRoot,
       RunPanels.summary(attempt.record, attempt.outcome, rows, this.firstFailureFrame())
     );
+  }
+
+  /**
+   * The chrome the mobile UI spec adds: the field control bar, the sheet's tab bar and the
+   * field caption (4.2, 4.3, 6.1, 6.4).
+   *
+   * All three are filled from the one `ShellState` the shell is filled from, so a value
+   * cannot disagree between the two places a phone shows it at once.
+   */
+  private renderChrome(state: ShellState, frame: FieldFrame): void {
+    this.updateBadges(frame);
+    // `Wide` is today's layout, unchanged: the overlay keys and the cross-section stay in
+    // the shell and there is no bar under the field.
+    const controls = state.layout === LayoutMode.Wide ? "" : FieldControls.render(state);
+    if (controls !== this.lastControlsHtml) {
+      Dom.setHtml(this.controlsRoot, controls);
+      this.lastControlsHtml = controls;
+    }
+    // The tab bar is a `Compact` thing: `Medium` keeps the panels docked at 300 px (4.5)
+    // and `Wide` is today's rail, so neither has anything to tab between.
+    const tabs = state.compact ? this.sheet.render() : "";
+    if (tabs !== this.lastTabsHtml) {
+      Dom.setHtml(this.sheetTabsRoot, tabs);
+      this.lastTabsHtml = tabs;
+    }
+    this.panelRoot.setAttribute("data-tab", state.compact ? this.sheet.selectedName : "");
+    document.documentElement.setAttribute(
+      "data-sheet",
+      this.sheet.collapsed ? "collapsed" : "open"
+    );
+    // Already markup: the caption draws the keys it names as key caps (6.4).
+    const hint = FieldControls.caption(state.coarse);
+    if (hint !== this.lastHintHtml) {
+      Dom.setHtml(this.hintRoot, hint);
+      this.lastHintHtml = hint;
+    }
+  }
+
+  /**
+   * The tab bar's badges (mobile UI spec 4.3).
+   *
+   * §3.2 of the UI spec gives dry and no-path stations "the loudest treatment in the whole
+   * build", and a panel behind a tab is the quietest place in it. The badge is that
+   * requirement re-stated for a layout where the panel is not always visible.
+   */
+  private updateBadges(frame: FieldFrame): void {
+    this.sheet.clearBadges();
+    const geometry = this.editor.geometry;
+    this.sheet.setBadge(PanelGroup.Validation, geometry === null ? 0 : geometry.violations.length);
+    let loud = 0;
+    for (let i = 0; i < frame.stations.length; i++) {
+      if (isLoudStatus(frame.stations[i].status)) {
+        loud++;
+      }
+    }
+    this.sheet.setBadge(PanelGroup.Stations, loud);
   }
 
   private crewCounts(): number[] {
@@ -784,7 +1013,74 @@ export class App implements SimTarget {
     if (!this.store.persistent) {
       state.note = "local storage is blocked: this session will not survive a reload";
     }
+
+    state.layout = this.viewport.mode;
+    state.coarse = this.viewport.coarse;
+    state.condensed = this.viewport.mode !== LayoutMode.Wide;
+    state.compact = this.viewport.mode === LayoutMode.Compact;
+    state.useSliceStepper = this.sliceStripWouldOverflow(state);
+    state.slicePickerOpen = this.slicePickerOpen;
+    state.devExpanded = this.devExpanded;
+    state.inDesign = this.screen === Screen.Design;
+    state.canUndo = this.editor.canUndo;
+    state.canRedo = this.editor.canRedo;
+    state.attemptOpen = attempt !== null && attempt.started;
+    state.paused = attempt !== null && attempt.paused;
+    state.showScrub = attempt !== null && this.screen === Screen.Replay;
+    state.scrubIndex = attempt === null ? 0 : attempt.frameIndex();
+    state.scrubCount = attempt === null ? 0 : attempt.timeline.length;
+    this.fillPrimaryAction(state, attempt);
     return state;
+  }
+
+  /**
+   * Whether the per-column strip still fits on one row (mobile UI spec 4.5).
+   *
+   * A width question, not a device question, which is why the answer applies in `Wide` too:
+   * at the 48 x 48 grid §5 pins, forty-eight numbered buttons do not fit on any row anyone
+   * owns, and the stepper is what keeps the cross-section reachable there.
+   */
+  private sliceStripWouldOverflow(state: ShellState): boolean {
+    const columns = state.sliceMax - state.sliceMin + 1;
+    // A slice cell is about 24 px of button plus its gap, and the strip carries a label.
+    const stripPx = columns * 30 + 90;
+    const availablePx =
+      this.viewport.mode === LayoutMode.Compact
+        ? this.renderer.width
+        : this.viewport.widthPx - this.viewport.widthPx * 0.55;
+    return stripPx > availablePx;
+  }
+
+  /**
+   * The current screen's one action, surfaced outside the sheet (mobile UI spec 8.4).
+   *
+   * "Start wave 1 is reachable with the panel sheet collapsed. A tester whose first action
+   * is behind a tab has been put in the editor, which is the thing §7.2 exists to prevent."
+   */
+  private fillPrimaryAction(state: ShellState, attempt: AttemptSession | null): void {
+    if (this.screen === Screen.Design) {
+      state.primaryLabel = "allocate crew →";
+      state.primaryAction = "allocate";
+      return;
+    }
+    if (this.screen === Screen.Allocate) {
+      const interWave = attempt !== null && attempt.started && !attempt.finished;
+      state.primaryLabel = interWave ? "next wave →" : "start wave 1 →";
+      state.primaryAction = "start";
+      return;
+    }
+    if (this.screen === Screen.Run && attempt !== null && !attempt.started) {
+      state.primaryLabel = "start wave 1";
+      state.primaryAction = "start";
+      return;
+    }
+    if (this.screen === Screen.Replay) {
+      state.primaryLabel = "fix this blueprint →";
+      state.primaryAction = "fix";
+      return;
+    }
+    state.primaryLabel = "";
+    state.primaryAction = "";
   }
 
   private static screenName(screen: Screen): string {
@@ -818,19 +1114,20 @@ export class App implements SimTarget {
     Dom.onInput(this.panelRoot, (name: string, value: string): void => {
       this.onFieldInput(name, value);
     });
-    this.panelRoot.addEventListener(
-      "pointerdown",
-      (event: PointerEvent): void => {
-        const node = event.target as HTMLElement | null;
-        if (node !== null && node.getAttribute("data-input") === "scrub") {
-          const attempt = this.attempt;
-          if (attempt !== null) {
-            attempt.setScrubbing(true);
-          }
-        }
-      },
-      true
-    );
+    // The field control bar and the sheet's tab bar carry the same `data-action` and
+    // `data-input` vocabulary the panels do (mobile UI spec 6.1), so they are wired the
+    // same way and no gesture needs a command of its own.
+    Dom.onAction(this.controlsRoot, (action: string, value: string): void => {
+      this.onAction(action, value);
+    });
+    Dom.onAction(this.sheetTabsRoot, (action: string, value: string): void => {
+      this.onAction(action, value);
+    });
+    Dom.onInput(this.controlsRoot, (name: string, value: string): void => {
+      this.onFieldInput(name, value);
+    });
+    this.wireScrubGrab(this.panelRoot);
+    this.wireScrubGrab(this.controlsRoot);
     window.addEventListener("pointerup", (): void => {
       const attempt = this.attempt;
       if (attempt !== null) {
@@ -838,14 +1135,52 @@ export class App implements SimTarget {
       }
     });
 
+    // Both input modalities stay live in every mode (mobile UI spec 3.2): a mouse keeps
+    // today's shift-drag and alt-click exactly as they are, and anything that is not a
+    // mouse goes through the recognizer. A tablet with a keyboard case is one person with
+    // two hands, and a build that picks one for them is wrong twice.
     this.canvas.addEventListener("pointerdown", (event: PointerEvent): void => {
-      this.onCanvasDown(event);
+      this.dismissDrawer();
+      if (event.pointerType === "mouse") {
+        this.onCanvasDown(event);
+        return;
+      }
+      const before = this.recognizer.phase;
+      this.recognizer.down(event.pointerId, event.clientX, event.clientY, App.now());
+      if (before !== GesturePhase.Pinching && this.recognizer.phase === GesturePhase.Pinching) {
+        this.gesturePinches++;
+      }
+      this.pumpGestures();
     });
     this.canvas.addEventListener("pointermove", (event: PointerEvent): void => {
-      this.onCanvasMove(event);
+      if (event.pointerType === "mouse") {
+        this.onCanvasMove(event);
+      }
+    });
+    // Touch moves are read from the window rather than the canvas, and no pointer capture
+    // is taken: a finger that slides off the cross-section is still panning it, and the
+    // recognizer ignores any pointer it did not see go down on the canvas, so a touch that
+    // began on the sheet stays the sheet's.
+    window.addEventListener("pointermove", (event: PointerEvent): void => {
+      if (event.pointerType === "mouse") {
+        return;
+      }
+      this.recognizer.move(event.pointerId, event.clientX, event.clientY, App.now());
+      this.pumpGestures();
     });
     window.addEventListener("pointerup", (event: PointerEvent): void => {
-      this.onCanvasUp(event);
+      if (event.pointerType === "mouse") {
+        this.onCanvasUp(event);
+        return;
+      }
+      this.recognizer.up(event.pointerId, event.clientX, event.clientY, App.now());
+      this.pumpGestures();
+    });
+    // 6.2: when the browser takes the gesture over -- a back-swipe, a notification, a call
+    // -- the placement is discarded rather than committed.
+    this.canvas.addEventListener("pointercancel", (event: PointerEvent): void => {
+      this.recognizer.cancel(event.pointerId, App.now());
+      this.pumpGestures();
     });
     this.canvas.addEventListener(
       "wheel",
@@ -861,6 +1196,176 @@ export class App implements SimTarget {
     window.addEventListener("keydown", (event: KeyboardEvent): void => {
       this.onKey(event);
     });
+  }
+
+  private wireScrubGrab(root: HTMLElement): void {
+    root.addEventListener(
+      "pointerdown",
+      (event: PointerEvent): void => {
+        const node = event.target as HTMLElement | null;
+        if (node !== null && node.getAttribute("data-input") === "scrub") {
+          const attempt = this.attempt;
+          if (attempt !== null) {
+            attempt.setScrubbing(true);
+          }
+        }
+      },
+      true
+    );
+  }
+
+  // ---------------------------------------------------------------- gestures
+
+  /**
+   * Drains the recognizer and turns each intent into a command (mobile UI spec 7.1).
+   *
+   * **No new `SimCommand`. Not one.** Every gesture below resolves either to an existing
+   * `SimCommand` -- the same `placeBlueprint`, `focus`, `startWave` a mouse produces -- or
+   * to a `ViewCommand`. That is what makes an attempt flown on a phone export a command log
+   * that replays bit-identically in the desktop build and in the headless runner; if a
+   * gesture could reach sim state, phone attempts would become a second, unverifiable
+   * population of data.
+   */
+  private pumpGestures(): void {
+    const intents = this.recognizer.drain();
+    for (let i = 0; i < intents.length; i++) {
+      this.applyGesture(intents[i]);
+    }
+  }
+
+  private applyGesture(intent: GestureIntent): void {
+    const kind = intent.kind;
+    if (kind === GestureKind.Cancel) {
+      // Discarded, never committed: a silent, uncommanded edit is worse than a lost
+      // gesture (6.2).
+      this.dragFrom = null;
+      this.dragTo = null;
+      return;
+    }
+    if (kind === GestureKind.Zoom) {
+      this.dispatcher.dispatchView(ViewCommand.zoom(intent.scale));
+      return;
+    }
+    if (kind === GestureKind.Pan) {
+      this.dispatcher.dispatchView(ViewCommand.pan(intent.dx, intent.dy));
+      return;
+    }
+    if (kind === GestureKind.DoubleTap) {
+      this.gestureDoubleTaps++;
+      // The tap that opened the pair has already placed a cell. A double tap is a view
+      // change, so it takes that placement back before framing (6.2).
+      if (this.screen === Screen.Design && this.lastTapPlaced && this.editor.undo(App.now())) {
+        this.refreshDesignFrame();
+      }
+      this.lastTapPlaced = false;
+      this.dispatcher.dispatchView(ViewCommand.fit());
+      this.panelDirty = true;
+      return;
+    }
+    if (kind === GestureKind.Tap) {
+      this.onTap(intent.x, intent.y);
+      return;
+    }
+    if (kind === GestureKind.LongPress || kind === GestureKind.Sweep) {
+      if (kind === GestureKind.LongPress) {
+        this.gestureLongPresses++;
+      }
+      // Inspect, place nothing (6.2). On a coarse pointer the selection is what predict
+      // reads, so a sweep is hover, performed deliberately (6.3).
+      this.dragFrom = null;
+      this.dragTo = null;
+      this.dispatcher.dispatchView(ViewCommand.select(this.cellAtClient(intent.x, intent.y)));
+      this.panelDirty = true;
+      return;
+    }
+    this.onDrag(intent);
+  }
+
+  private onTap(clientX: number, clientY: number): void {
+    this.gestureTaps++;
+    this.lastTapPlaced = false;
+    const cell = this.cellAtClient(clientX, clientY);
+    if (this.screen === Screen.Design) {
+      if (this.editor.applyRect(cell, cell, App.now())) {
+        this.refreshDesignFrame();
+        this.lastTapPlaced = true;
+      }
+      this.dispatcher.dispatchView(ViewCommand.select(cell));
+      this.panelDirty = true;
+      return;
+    }
+    // 6.2: focus-fire the attacker under the tap, else inspect the cell. The same `focus`
+    // a click already is.
+    const target = this.screen === Screen.Run ? this.attackerAt(clientX, clientY) : -1;
+    if (target >= 0) {
+      this.dispatcher.dispatchSim(SimCommand.focus(target));
+    } else {
+      this.dispatcher.dispatchView(ViewCommand.select(cell));
+    }
+    this.panelDirty = true;
+  }
+
+  /** A one-finger drag: a rectangle in Design, a pan everywhere else (6.2). */
+  private onDrag(intent: GestureIntent): void {
+    const editing = this.screen === Screen.Design;
+    if (intent.kind === GestureKind.DragStart) {
+      if (editing) {
+        this.dragFrom = this.cellAtClient(intent.x, intent.y);
+        this.dragTo = this.dragFrom;
+        return;
+      }
+      this.panFromX = intent.x;
+      this.panFromY = intent.y;
+      return;
+    }
+    if (intent.kind === GestureKind.DragMove) {
+      if (editing) {
+        if (this.dragFrom !== null) {
+          this.dragTo = this.cellAtClient(intent.x, intent.y);
+        }
+        return;
+      }
+      this.dispatcher.dispatchView(
+        ViewCommand.pan(intent.x - this.panFromX, intent.y - this.panFromY)
+      );
+      this.panFromX = intent.x;
+      this.panFromY = intent.y;
+      return;
+    }
+    if (intent.kind !== GestureKind.DragEnd) {
+      return;
+    }
+    this.gestureDrags++;
+    const from = this.dragFrom;
+    const to = this.dragTo;
+    this.dragFrom = null;
+    this.dragTo = null;
+    if (!editing || from === null || to === null) {
+      return;
+    }
+    if (this.editor.applyRect(from, to, App.now())) {
+      this.refreshDesignFrame();
+    }
+    this.dispatcher.dispatchView(ViewCommand.select(to));
+    this.panelDirty = true;
+  }
+
+  /**
+   * 4.4: the landscape drawer is dismissed by tapping the field.
+   *
+   * Only in that layout. Everywhere else the sheet is stacked below the field rather than
+   * overlaid on it, and closing it because the tester touched the canvas would be a
+   * design that jumps under their finger -- which 4.4 says costs more than the 300 px does.
+   */
+  private dismissDrawer(): void {
+    if (this.viewport.compactLandscape && !this.sheet.collapsed) {
+      this.sheet.setCollapsed(true);
+      this.panelDirty = true;
+    }
+  }
+
+  private cellAtClient(clientX: number, clientY: number): IVec3 {
+    return this.renderer.cellAt(this.frame(), this.view, clientX, clientY);
   }
 
   private onCanvasDown(event: PointerEvent): void {
@@ -964,6 +1469,12 @@ export class App implements SimTarget {
       return;
     }
     const key = event.key;
+    // 9.1: whether any shortcut fired. Pooled with the gesture counts it answers the one
+    // question 9.2 says pooling destroys -- was the overlay unreadable, or was the control
+    // not where the tester's thumb was.
+    if (App.isBoundKey(key)) {
+      this.keyboardUsed = true;
+    }
     if (key >= "1" && key <= "5") {
       this.dispatcher.dispatchView(ViewCommand.overlay(Number(key) as OverlayMode));
       return;
@@ -1014,6 +1525,23 @@ export class App implements SimTarget {
     }
   }
 
+  /** The keys `onKey` acts on, kept beside it so the 9.1 flag cannot drift from them. */
+  private static isBoundKey(key: string): boolean {
+    if (key >= "1" && key <= "5") {
+      return true;
+    }
+    return (
+      key === "[" ||
+      key === "]" ||
+      key === "z" ||
+      key === "y" ||
+      key === " " ||
+      key === "," ||
+      key === "." ||
+      key === "Escape"
+    );
+  }
+
   private onFieldInput(name: string, value: string): void {
     if (name === "name") {
       // Deliberately does not mark the panel dirty: rebuilding it would replace the input
@@ -1037,6 +1565,50 @@ export class App implements SimTarget {
     }
     if (action === "slice") {
       this.dispatcher.dispatchView(ViewCommand.slice(Number(value)));
+      this.slicePickerOpen = false;
+      this.panelDirty = true;
+      return;
+    }
+    // Mobile UI spec 6.1: the on-screen half of the verb table. Every one of these resolves
+    // to a command the keyboard already fires -- nothing is moved off the keyboard, and
+    // nothing here is a new `SimCommand` (7.1).
+    if (action === "slice-step") {
+      const design = this.currentDesign();
+      this.dispatcher.dispatchView(
+        ViewCommand.slice(design.clampSlice(this.view.slice + Number(value)))
+      );
+      this.panelDirty = true;
+      return;
+    }
+    if (action === "slice-picker") {
+      this.slicePickerOpen = !this.slicePickerOpen;
+      this.panelDirty = true;
+      return;
+    }
+    if (action === "fit") {
+      this.dispatcher.dispatchView(ViewCommand.fit());
+      this.panelDirty = true;
+      return;
+    }
+    if (action === "deselect") {
+      this.dispatcher.dispatchView(ViewCommand.select(null));
+      this.panelDirty = true;
+      return;
+    }
+    if (action === "sheet-tab") {
+      this.sheet.select(PanelSheet.byName(value));
+      this.panelDirty = true;
+      return;
+    }
+    if (action === "sheet-toggle") {
+      this.sheet.toggle();
+      this.panelDirty = true;
+      return;
+    }
+    if (action === "dev-expand") {
+      // 4.2: the chip expands to the full §6 readout. It is never off -- a tester's "it
+      // stuttered" has to arrive with numbers, and that is stronger on a phone, not weaker.
+      this.devExpanded = !this.devExpanded;
       this.panelDirty = true;
       return;
     }
@@ -1227,7 +1799,7 @@ export class App implements SimTarget {
     if (attempt === null) {
       return;
     }
-    attempt.writeRecord(this.renderer.renderP95());
+    this.writeAttemptRecord(attempt);
     Dom.downloadText(
       AttemptExport.fileName(attempt.record),
       AttemptExport.toPrettyJson(attempt.record, this.telemetry.summary())

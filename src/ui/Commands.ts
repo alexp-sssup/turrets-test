@@ -62,6 +62,15 @@ export enum ViewCommandKind {
   Zoom = 5,
   /** 2D-specific: which cross-section is drawn solid. */
   Slice = 6,
+  /**
+   * Frame the design in the viewport (mobile UI spec 7.1).
+   *
+   * The one command this document adds, and it is a view command: a pinch-zoomed tester
+   * needs a way back that is not "reload the page". It is not logged, and no `SimCommand`
+   * was added for any gesture -- that is what keeps a phone attempt replayable in the
+   * desktop build and in the headless batch runner.
+   */
+  Fit = 7,
 }
 
 export class ViewCommand {
@@ -104,6 +113,10 @@ export class ViewCommand {
   public static slice(x: number): ViewCommand {
     return new ViewCommand(ViewCommandKind.Slice, x, 0, null);
   }
+
+  public static fit(): ViewCommand {
+    return new ViewCommand(ViewCommandKind.Fit, 0, 0, null);
+  }
 }
 
 /** The simulation side of the split. Implemented by the app, called only by the dispatcher. */
@@ -118,6 +131,17 @@ export interface SimTarget {
 /** The seek side of the split: replay position is a view concern, not a sim one. */
 export interface SeekTarget {
   seekToTick(tick: number): void;
+}
+
+/**
+ * The framing side of the split (mobile UI spec 7.1).
+ *
+ * Fitting the design needs the viewport's size and the design's bounds, neither of which
+ * belongs in `ViewState`, so the dispatcher is handed this one method rather than a
+ * reference to anything that could reach the simulation.
+ */
+export interface FitTarget {
+  fitView(): void;
 }
 
 /**
@@ -136,17 +160,20 @@ export class Dispatcher {
   private readonly sim: SimTarget;
   private readonly view: ViewState;
   private readonly seek: SeekTarget;
+  private readonly fit: FitTarget;
   private readonly onOverlayChanged: (mode: OverlayMode) => void;
 
   public constructor(
     sim: SimTarget,
     view: ViewState,
     seek: SeekTarget,
+    fit: FitTarget,
     onOverlayChanged: (mode: OverlayMode) => void
   ) {
     this.sim = sim;
     this.view = view;
     this.seek = seek;
+    this.fit = fit;
     this.onOverlayChanged = onOverlayChanged;
   }
 
@@ -192,6 +219,10 @@ export class Dispatcher {
     if (command.kind === ViewCommandKind.Pan) {
       this.view.panX += command.value;
       this.view.panY += command.secondary;
+      return;
+    }
+    if (command.kind === ViewCommandKind.Fit) {
+      this.fit.fitView();
       return;
     }
     if (command.kind === ViewCommandKind.Zoom) {

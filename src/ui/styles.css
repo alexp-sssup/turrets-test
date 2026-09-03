@@ -231,6 +231,7 @@ kbd {
   flex: 1 1 auto;
   display: flex;
   min-height: 0;
+  overflow: hidden;
 }
 
 .field-wrap {
@@ -246,6 +247,12 @@ kbd {
   min-height: 0;
   display: block;
   cursor: crosshair;
+  /*
+   * The canvas owns its own gestures, and nothing else does (mobile UI spec 6.2, 8.2). The
+   * sheet keeps native `pan-y` scrolling and the page keeps the browser's own pinch-zoom,
+   * because a tester who needs to magnify a joint gets to.
+   */
+  touch-action: none;
 }
 
 .field-hint {
@@ -255,14 +262,44 @@ kbd {
   font-size: 11px;
   border-top: 1px solid var(--panel-edge);
   background: #11151b;
+  flex: 0 0 auto;
+}
+
+/*
+ * On a small screen the caption is one scrollable line rather than three wrapped ones. It
+ * is not on 4.1's priority list at all -- the verbs it describes are all on the control bar
+ * -- so it is the first thing the field takes its space back from.
+ */
+:root[data-layout="compact"] .field-hint {
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  font-size: 12px;
+}
+
+:root[data-layout="compact"] .field-hint::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * The panel sheet (4.3) and the landscape drawer (4.4) are this same element. In `Wide` the
+ * tab bar is empty and it is the docked rail it has always been, at 372 px.
+ */
+.sheet {
+  flex: 0 0 372px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-left: 1px solid var(--panel-edge);
+  background: #10141a;
 }
 
 .panels {
-  flex: 0 0 372px;
-  border-left: 1px solid var(--panel-edge);
-  background: #10141a;
+  flex: 1 1 auto;
   overflow-y: auto;
   padding: 10px;
+  touch-action: pan-y;
 }
 
 /* ---------------------------------------------------------------- panels */
@@ -677,4 +714,598 @@ ul.library-list li {
 .noscript {
   padding: 20px;
   color: var(--warn);
+}
+
+/* ================================================================ mobile UI spec
+ *
+ * One build, one layout, no mobile fork (mobile UI spec 2). There is no second stylesheet
+ * and no cut-down screen set; the layout, the hit targets and the input hints respond to
+ * the viewport and the pointer that arrived with it.
+ *
+ * The breakpoints are *not* repeated here as media queries. `Viewport` classifies with
+ * `classifyLayout` and stamps `data-layout`, `data-pointer` and `data-orientation` onto the
+ * document element, and everything below keys off those attributes -- so the numbers in
+ * 3.1 live in one testable place and cannot drift from a query nobody can unit-test.
+ */
+
+/* ---------------------------------------------------------------- safe areas (4.3) */
+
+/*
+ * Nothing interactive sits under a notch or a home indicator. `env()` is zero everywhere
+ * else, so these are inert on a desktop.
+ */
+.shell {
+  padding-top: env(safe-area-inset-top);
+}
+
+.shell-status,
+.shell-overlays,
+.banner,
+.field-hint,
+.dev {
+  padding-left: calc(14px + env(safe-area-inset-left));
+  padding-right: calc(14px + env(safe-area-inset-right));
+}
+
+.dev {
+  padding-bottom: calc(5px + env(safe-area-inset-bottom));
+}
+
+/* ---------------------------------------------------------------- the field control bar */
+
+.field-controls {
+  flex: 0 0 auto;
+  background: #11151b;
+  border-top: 1px solid var(--panel-edge);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  position: relative;
+  /* 4.4: pinned to the bottom edge, above the drawer. */
+  z-index: 4;
+}
+
+.field-controls:empty {
+  display: none;
+}
+
+.field-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px 8px;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  /* The bar scrolls rather than wrapping: 4.1 spends space from the bottom of its list up. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.field-row::-webkit-scrollbar {
+  display: none;
+}
+
+.overlay-group,
+.transport-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+/* The transport keeps to the far end of the row, so the overlay keys own the thumb's side. */
+.transport-group {
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+.field-key,
+.field-button,
+.slice-readout,
+.dev-chip,
+.field-primary {
+  flex: 0 0 auto;
+  background: #1c2431;
+  color: var(--text);
+  border: 1px solid var(--panel-edge);
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font: 12px/1 system-ui, sans-serif;
+}
+
+.field-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.field-key .key {
+  font: 10px/1 var(--mono);
+  color: var(--dim);
+  border: 1px solid var(--panel-edge);
+  border-radius: 2px;
+  padding: 1px 3px;
+}
+
+.field-key.active,
+.field-key.active .key {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 6.1: the active one is named. At 390 px the other four are their number and nothing else. */
+:root[data-layout="compact"] .field-key:not(.active) .field-key-name {
+  display: none;
+}
+
+:root[data-layout="compact"] .field-key:not(.active) {
+  justify-content: center;
+  min-width: 44px;
+}
+
+.primary-row {
+  overflow: visible;
+}
+
+.field-primary {
+  flex: 1 1 auto;
+  background: #1d3c5c;
+  border-color: #2d6796;
+  color: #d8ecff;
+  font-size: 13px;
+  padding: 9px 10px;
+}
+
+.slice-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.slice-readout {
+  font: 12px/1 var(--mono);
+  color: var(--accent);
+}
+
+.slice-mount {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* 6.2: the readout opens a full picker, so "an empty section reads as empty" survives. */
+.slice-picker {
+  max-height: 40dvh;
+  overflow-y: auto;
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  background: #10141a;
+  border-top: 1px solid var(--panel-edge);
+  touch-action: pan-y;
+}
+
+.slice-picker h2 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--dim);
+}
+
+.slice-picker ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.slice-picker li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px;
+  border-bottom: 1px solid #1b212a;
+  font: 12px/1.4 var(--mono);
+  cursor: pointer;
+}
+
+.slice-picker li.active {
+  color: var(--accent);
+}
+
+.slice-picker li.empty {
+  opacity: 0.45;
+}
+
+.dev-chip {
+  margin-left: auto;
+  font: 11px/1 var(--mono);
+  color: var(--dim);
+}
+
+.dev-chip.warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.dev-chip.bad {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.field-scrub {
+  flex: 1 1 130px;
+  min-width: 90px;
+  margin: 0 2px;
+}
+
+/* ---------------------------------------------------------------- the panel sheet (4.3) */
+
+.sheet-tab-bar {
+  display: none;
+}
+
+.sheet-tab-bar:not(:empty) {
+  display: block;
+}
+
+.sheet-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 0 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: #11151b;
+  border-bottom: 1px solid var(--panel-edge);
+}
+
+.sheet-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.sheet-tab,
+.sheet-toggle {
+  flex: 0 0 auto;
+  min-height: 48px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--dim);
+  font: 12px/1 system-ui, sans-serif;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.sheet-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.sheet-toggle {
+  margin-left: auto;
+  font: 12px/1 var(--mono);
+}
+
+/*
+ * The badge is UI spec §3.2's "loudest treatment in the whole build", restated for a layout
+ * where the panel it belongs to is behind a tab. It is not decoration.
+ */
+.sheet-badge {
+  display: inline-block;
+  margin-left: 5px;
+  min-width: 17px;
+  padding: 1px 4px;
+  border-radius: 9px;
+  background: var(--bad);
+  color: #1a0d0d;
+  font: 11px/1.4 var(--mono);
+}
+
+.panel-close {
+  float: right;
+  margin: -4px -4px 0 0;
+  font: 10px/1 var(--mono);
+  padding: 4px 6px;
+}
+
+/*
+ * One tab selects one group. Every other panel is *hidden*, never absent: §5 forbids
+ * cutting, abridging or desktop-only panels, and `always` marks the sections that show
+ * whichever tab is up. A panel with no group at all is one the sheet does not tab between.
+ */
+:root[data-layout="compact"] .panels[data-tab] .panel[data-group] {
+  display: none;
+}
+
+:root[data-layout="compact"] .panels[data-tab] .panel[data-group="always"],
+:root[data-layout="compact"] .panels[data-tab="palette"] .panel[data-group="palette"],
+:root[data-layout="compact"] .panels[data-tab="bill"] .panel[data-group="bill"],
+:root[data-layout="compact"] .panels[data-tab="validation"] .panel[data-group="validation"],
+:root[data-layout="compact"] .panels[data-tab="inspector"] .panel[data-group="inspector"],
+:root[data-layout="compact"] .panels[data-tab="wave"] .panel[data-group="wave"],
+:root[data-layout="compact"] .panels[data-tab="stations"] .panel[data-group="stations"],
+:root[data-layout="compact"] .panels[data-tab="depots"] .panel[data-group="depots"],
+:root[data-layout="compact"] .panels[data-tab="crew"] .panel[data-group="crew"],
+:root[data-layout="compact"] .panels[data-tab="lane"] .panel[data-group="lane"],
+:root[data-layout="compact"] .panels[data-tab="chain"] .panel[data-group="chain"],
+:root[data-layout="compact"] .panels[data-tab=""] .panel[data-group] {
+  display: block;
+}
+
+/* ---------------------------------------------------------------- Medium (4.5) */
+
+:root[data-layout="medium"] .sheet {
+  flex-basis: 300px;
+}
+
+/* ---------------------------------------------------------------- condensed shell (4.2) */
+
+:root[data-layout="medium"] .shell-status,
+:root[data-layout="compact"] .shell-status {
+  gap: 16px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+:root[data-layout="medium"] .shell-status::-webkit-scrollbar,
+:root[data-layout="compact"] .shell-status::-webkit-scrollbar {
+  display: none;
+}
+
+:root[data-layout="compact"] .shell-value {
+  font-size: 14px;
+}
+
+/* The overlay keys and the cross-section have moved to the control bar; the legend has not. */
+:root[data-layout="compact"] .shell-overlays {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-wrap: nowrap;
+}
+
+:root[data-layout="compact"] .shell-overlays:empty,
+.dev:empty {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- Compact, portrait (4.3) */
+
+:root[data-layout="compact"] .stage {
+  flex-direction: column;
+}
+
+:root[data-layout="compact"] .field-wrap {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+/*
+ * At least 240 px, and at most 55 dvh while there is a sheet below it to protect. `dvh`
+ * rather than `vh` so a collapsing browser toolbar cannot crop the cross-section or push
+ * the sheet under the address bar.
+ *
+ * With the sheet collapsed there is nothing below the field to protect, and 4.1 ranks the
+ * cross-section first, so it takes the room back.
+ */
+:root[data-layout="compact"] #field {
+  /*
+   * Shrinkable down to its floor, never past it: "it is never zero-height behind an open
+   * sheet" (4.3). Without the shrink the control bar would be pushed out of the field's box
+   * and end up sitting on top of the sheet's tab bar, which is a control covering a control.
+   */
+  flex: 0 1 auto;
+  height: 55dvh;
+  min-height: 240px;
+}
+
+:root[data-layout="compact"][data-sheet="collapsed"] .field-wrap,
+:root[data-layout="compact"][data-sheet="collapsed"] #field {
+  flex: 1 1 auto;
+}
+
+:root[data-layout="compact"] .sheet {
+  /*
+   * Basis zero, so the sheet takes the room the field leaves rather than bidding for it
+   * with the height of its own contents -- a rail holding a thousand pixels of panel would
+   * otherwise win every shrink and push the control bar out of the field's box.
+   *
+   * The floors are 4.1's priority order made arithmetic. The canvas keeps its 240 px (4.3)
+   * before the panel gets anything, and the panel then keeps 150 px before the canvas grows
+   * past it towards 55 dvh: space is spent from the bottom of that list up, and on a 390 px
+   * phone there is not enough of it for both to have everything they ask for.
+   */
+  flex: 1 1 0;
+  min-height: 48px;
+  border-left: none;
+  border-top: 1px solid var(--panel-edge);
+}
+
+:root[data-layout="compact"][data-sheet="open"] .sheet {
+  min-height: 150px;
+}
+
+/* Exactly two states, and no drag-to-resize: three snap points are a physics problem (4.3). */
+:root[data-layout="compact"][data-sheet="collapsed"] .sheet {
+  flex: 0 0 auto;
+}
+
+:root[data-layout="compact"][data-sheet="collapsed"] .panels {
+  display: none;
+}
+
+:root[data-layout="compact"] .panels {
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+}
+
+/* ---------------------------------------------------------------- Compact, landscape (4.4) */
+
+/*
+ * At 360 px of height there is no room to stack, so the field owns the whole stage and the
+ * sheet becomes a right-edge drawer overlaid on it. The field does not reflow when it
+ * opens: a design that jumps under the tester's finger costs more than the 300 px does.
+ */
+:root[data-layout="compact"][data-orientation="landscape"] .stage {
+  flex-direction: row;
+  position: relative;
+}
+
+:root[data-layout="compact"][data-orientation="landscape"] .field-wrap {
+  flex: 1 1 auto;
+}
+
+:root[data-layout="compact"][data-orientation="landscape"] #field {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+/*
+ * "The field owns the whole stage" (4.4), so at 360 px of height the control bar is pinned
+ * over the field's bottom edge rather than stacked under it, and the caption goes: there is
+ * no room for a line of prose beside a cross-section and its key.
+ */
+:root[data-layout="compact"][data-orientation="landscape"] .field-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(17, 21, 27, 0.94);
+}
+
+:root[data-layout="compact"][data-orientation="landscape"] .field-hint {
+  display: none;
+}
+
+/* One row, primary included: half the field is too much to spend on a bar over it. */
+:root[data-layout="compact"][data-orientation="landscape"] .field-bar {
+  flex-direction: row;
+  align-items: center;
+}
+
+:root[data-layout="compact"][data-orientation="landscape"] .primary-row {
+  flex: 0 0 auto;
+}
+
+:root[data-layout="compact"][data-orientation="landscape"] .field-primary {
+  flex: 0 0 auto;
+}
+
+:root[data-layout="compact"][data-orientation="landscape"] .sheet {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+  max-width: 100%;
+  border-left: 1px solid var(--panel-edge);
+  border-top: none;
+  z-index: 3;
+}
+
+/*
+ * Collapsed, the drawer is its tab bar and nothing else, so the field underneath stays
+ * tappable -- which is how 4.4 says the drawer is dismissed.
+ */
+:root[data-layout="compact"][data-orientation="landscape"][data-sheet="collapsed"] .sheet {
+  background: transparent;
+  border-left: none;
+  pointer-events: none;
+}
+
+:root[data-layout="compact"][data-orientation="landscape"][data-sheet="collapsed"] .sheet-tab-bar {
+  pointer-events: auto;
+}
+
+/* ---------------------------------------------------------------- hit targets (8.1) */
+
+/*
+ * At least 44 x 44 CSS px on a coarse pointer, including overlay keys, palette entries, tab
+ * bar items, slice stepper arrows and the transport buttons. Where the visual affordance is
+ * smaller, the *target* is padded rather than the affordance grown.
+ */
+:root[data-pointer="coarse"] button,
+:root[data-pointer="coarse"] .palette-entry,
+:root[data-pointer="coarse"] .slice-cell,
+:root[data-pointer="coarse"] .overlay-key,
+:root[data-pointer="coarse"] li.status,
+:root[data-pointer="coarse"] ul.violations li,
+:root[data-pointer="coarse"] ul.library-list li,
+:root[data-pointer="coarse"] ol.chain li,
+:root[data-pointer="coarse"] .slice-picker li,
+:root[data-pointer="coarse"] .callout {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+:root[data-pointer="coarse"] button.small,
+:root[data-pointer="coarse"] .panel-close {
+  padding: 8px 12px;
+}
+
+:root[data-pointer="coarse"] .field-key,
+:root[data-pointer="coarse"] .field-button,
+:root[data-pointer="coarse"] .slice-readout,
+:root[data-pointer="coarse"] .dev-chip {
+  min-height: 44px;
+}
+
+:root[data-pointer="coarse"] input[type="range"] {
+  height: 44px;
+}
+
+/* ---------------------------------------------------------------- text (8.1) */
+
+/*
+ * Body text and mono readouts are at least 12 px on `Compact`. Labels stay where they are,
+ * because they are labels on values, not the values -- and the numbers keep their
+ * precision either way: a phone gets fewer characters per line, not fewer digits (§5).
+ */
+:root[data-layout="compact"] .hint,
+:root[data-layout="compact"] table.kv th,
+:root[data-layout="compact"] li.status,
+:root[data-layout="compact"] ul.violations li,
+:root[data-layout="compact"] ol.chain li,
+:root[data-layout="compact"] .library-lesson,
+:root[data-layout="compact"] .name-field,
+:root[data-layout="compact"] .callout-hint,
+:root[data-layout="compact"] .stale,
+:root[data-layout="compact"] .banner,
+:root[data-layout="compact"] .status-detail,
+:root[data-layout="compact"] .violation-detail {
+  font-size: 12px;
+}
+
+:root[data-layout="compact"] table.kv td,
+:root[data-layout="compact"] .chain-time,
+:root[data-layout="compact"] .chain-detail,
+:root[data-layout="compact"] .status-name,
+:root[data-layout="compact"] .status-badge,
+:root[data-layout="compact"] .slice-cell,
+:root[data-layout="compact"] .dev,
+:root[data-layout="compact"] .dev-chip {
+  font-size: 12px;
+}
+
+/* The chain rows stop reserving desktop column widths once there are 390 px to share. */
+:root[data-layout="compact"] ol.chain li {
+  flex-wrap: wrap;
+}
+
+:root[data-layout="compact"] .chain-kind {
+  flex: 0 0 auto;
+}
+
+:root[data-layout="compact"] .palette {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }

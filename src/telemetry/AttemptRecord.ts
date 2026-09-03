@@ -1,6 +1,7 @@
 import { JointRef } from "../structure/CollapseResolver";
 import { OverlayMode } from "../render/ViewState";
 import { DesignMetrics } from "./DesignMetrics";
+import { DeviceProfile } from "./DeviceProfile";
 
 /** Seconds spent with each overlay open, split by whether a wave was on the lane. */
 export class OverlayDwell {
@@ -97,6 +98,12 @@ export class AttemptRecord {
   public solveCount: number;
   public cellCount: number;
   public predictOpenedDuringRun: boolean;
+  /**
+   * What it was flown on (mobile UI spec 9.1). Segmenting by it is 9.2's rule, and reading
+   * the compact segment as a question about the layout rather than about the solver is the
+   * only thing that makes §10's risk visible.
+   */
+  public readonly device: DeviceProfile;
 
   public constructor(
     sessionId: string,
@@ -137,6 +144,7 @@ export class AttemptRecord {
     this.solveCount = 0;
     this.cellCount = 0;
     this.predictOpenedDuringRun = false;
+    this.device = new DeviceProfile();
   }
 
   /**

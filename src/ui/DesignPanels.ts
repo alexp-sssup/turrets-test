@@ -12,6 +12,7 @@ import { OverlayMode } from "../render/ViewState";
 import { structuralStatusName } from "../structure/StructuralReport";
 import { WorkedExample } from "../data/WorkedExamples";
 import { Dom } from "./Dom";
+import { FieldControls } from "./FieldControls";
 import { EditorModel } from "./EditorModel";
 
 /**
@@ -20,6 +21,13 @@ import { EditorModel } from "./EditorModel";
  * The validation panel is always open, never a modal and never a blocking error, and every
  * row locates itself on the field when clicked. The point is that a design's problems are
  * ambient while the tester lays it out rather than a gate they hit at the end.
+ *
+ * Every section carries a `data-group`, which is the tab the panel sheet files it under on
+ * a small screen (mobile UI spec 4.3). The groups are the existing panels, not new ones,
+ * and no panel is cut: `always` marks the ones that show whichever tab is selected. `coarse`
+ * is the pointer kind (3.2) and it changes the *copy* only -- an instruction to alt-click is
+ * useless to a finger (6.3), and the words come from the one hint table so they cannot drift
+ * from the caption (6.4).
  */
 export class DesignPanels {
   public static render(
@@ -29,20 +37,26 @@ export class DesignPanels {
     ammo: AmmoTable,
     selected: IVec3 | null,
     overlay: OverlayMode,
-    predict: PredictOutcome | null
+    predict: PredictOutcome | null,
+    coarse: boolean
   ): string {
     return (
-      DesignPanels.paletteSection(editor, materials) +
+      DesignPanels.paletteSection(editor, materials, coarse) +
       DesignPanels.billSection(editor, materials) +
       DesignPanels.validationSection(editor) +
-      DesignPanels.selectionSection(editor, frame, ammo, selected, overlay, predict) +
+      DesignPanels.selectionSection(editor, frame, ammo, selected, overlay, predict, coarse) +
       DesignPanels.actionsSection(editor)
     );
   }
 
-  private static paletteSection(editor: EditorModel, materials: MaterialTable): string {
+  private static paletteSection(
+    editor: EditorModel,
+    materials: MaterialTable,
+    coarse: boolean
+  ): string {
     const entries = EditorModel.palette();
-    let html = '<section class="panel"><h2>palette</h2><div class="palette">';
+    let html =
+      '<section class="panel" data-group="palette"><h2>palette</h2><div class="palette">';
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const cost = entry.erases ? 0 : materials.get(entry.material).costPerVoxel;
@@ -67,9 +81,11 @@ export class DesignPanels {
         "</button>";
     }
     html +=
-      "</div><p class=\"hint\">click a cell, or drag a rectangle. every placement updates the " +
-      "bill below as you make it. <kbd>alt</kbd>-click to inspect a cell without placing. " +
-      "<kbd>z</kbd> undo, <kbd>y</kbd> redo.</p></section>";
+      '</div><p class="hint">' +
+      Dom.escape(FieldControls.hintFor("place", coarse)) +
+      ". every placement updates the bill below as you make it. " +
+      Dom.escape(FieldControls.hintFor("inspect", coarse)) +
+      ", which places nothing. <kbd>z</kbd> undo, <kbd>y</kbd> redo.</p></section>";
     return html;
   }
 
@@ -79,7 +95,7 @@ export class DesignPanels {
     const stone = bill.countOf(MaterialId.Stone);
     const remaining = editor.remainingBudget;
     return (
-      '<section class="panel"><h2>bill of materials</h2><table class="kv">' +
+      '<section class="panel" data-group="bill"><h2>bill of materials</h2><table class="kv">' +
       DesignPanels.row("wood", wood.toString() + " × " + materials.get(MaterialId.Wood).costPerVoxel.toString()) +
       DesignPanels.row("stone", stone.toString() + " × " + materials.get(MaterialId.Stone).costPerVoxel.toString()) +
       DesignPanels.row("blocks", editor.blockCount.toString()) +
@@ -100,7 +116,7 @@ export class DesignPanels {
   private static validationSection(editor: EditorModel): string {
     const geometry = editor.geometry;
     const structural = editor.structural;
-    let html = '<section class="panel"><h2>validation</h2>';
+    let html = '<section class="panel" data-group="validation"><h2>validation</h2>';
 
     if (structural === null) {
       html += '<p class="hint">' + (editor.awaitingSolve ? "analysing…" : "nothing placed yet") + "</p>";
@@ -166,18 +182,25 @@ export class DesignPanels {
     ammo: AmmoTable,
     selected: IVec3 | null,
     overlay: OverlayMode,
-    predict: PredictOutcome | null
+    predict: PredictOutcome | null,
+    coarse: boolean
   ): string {
     if (selected === null) {
+      // 6.3: the copy stops telling a finger to alt-click and says what that pointer can do.
       return (
-        '<section class="panel"><h2>inspector</h2><p class="hint">alt-click a cell to inspect ' +
-        "it. select a station to see its arc, its route to a depot and what a resupply trip " +
+        '<section class="panel" data-group="inspector"><h2>inspector</h2><p class="hint">' +
+        Dom.escape(FieldControls.hintFor("inspect", coarse)) +
+        ". select a station to see its arc, its route to a depot and what a resupply trip " +
         "costs.</p></section>"
       );
     }
     const blueprint = editor.blueprint();
     const block = blueprint.indexAt(selected);
-    let html = '<section class="panel"><h2>inspector</h2>';
+    // 6.1: escape deselects, and a finger has no escape key, so the inspector carries the
+    // close control the keyboard binding is the shortcut for.
+    let html =
+      '<section class="panel" data-group="inspector"><h2>inspector' +
+      '<button class="panel-close" data-action="deselect" title="escape">close</button></h2>';
     html +=
       '<table class="kv">' +
       DesignPanels.row("cell", Dom.escape(selected.toString())) +
@@ -282,7 +305,7 @@ export class DesignPanels {
 
   private static actionsSection(editor: EditorModel): string {
     return (
-      '<section class="panel actions">' +
+      '<section class="panel actions" data-group="always">' +
       '<div class="button-row">' +
       '<button data-action="undo"' +
       (editor.canUndo ? "" : " disabled") +
@@ -311,7 +334,7 @@ export class DesignPanels {
     currentName: string
   ): string {
     let html =
-      '<section class="panel"><h2>library</h2>' +
+      '<section class="panel" data-group="always"><h2>library</h2>' +
       '<p class="hint">local to this browser. no sharing UI in P0 — the export format is the ' +
       "seam a server would sit behind.</p><h3>worked examples</h3><ul class=\"library-list\">";
     for (let i = 0; i < examples.length; i++) {

@@ -67,7 +67,7 @@ export class RunPanels {
     const progress =
       frame.waveDuration > 0 ? Math.min(1, frame.waveElapsed / frame.waveDuration) : 0;
     return (
-      '<section class="panel"><h2>wave ' +
+      '<section class="panel" data-group="wave"><h2>wave ' +
       (waveIndex + 1).toString() +
       " of " +
       waveTotal.toString() +
@@ -97,9 +97,13 @@ export class RunPanels {
 
   private static stationSection(frame: FieldFrame, ammo: AmmoTable): string {
     if (frame.stations.length === 0) {
-      return '<section class="panel"><h2>stations</h2><p class="bad">no station standing.</p></section>';
+      return (
+        '<section class="panel" data-group="stations"><h2>stations</h2>' +
+        '<p class="bad">no station standing.</p></section>'
+      );
     }
-    let html = '<section class="panel"><h2>stations</h2><ul class="status-list">';
+    let html =
+      '<section class="panel" data-group="stations"><h2>stations</h2><ul class="status-list">';
     for (let i = 0; i < frame.stations.length; i++) {
       const station = frame.stations[i];
       const loud = isLoudStatus(station.status);
@@ -170,7 +174,8 @@ export class RunPanels {
     if (frame.depots.length === 0) {
       return "";
     }
-    let html = '<section class="panel"><h2>depots</h2><ul class="status-list">';
+    let html =
+      '<section class="panel" data-group="depots"><h2>depots</h2><ul class="status-list">';
     for (let i = 0; i < frame.depots.length; i++) {
       const depot = frame.depots[i];
       html +=
@@ -193,7 +198,7 @@ export class RunPanels {
 
   private static crewSection(frame: FieldFrame, crewCounts: readonly number[]): string {
     let html =
-      '<section class="panel"><h2>crew</h2><table class="kv">' +
+      '<section class="panel" data-group="crew"><h2>crew</h2><table class="kv">' +
       RunPanels.row("alive", frame.crewAlive.toString());
     for (let role = 1; role <= 3; role++) {
       html += RunPanels.row(crewRoleName(role as CrewRole), crewCounts[role].toString());
@@ -210,9 +215,12 @@ export class RunPanels {
 
   private static attackerSection(frame: FieldFrame, focusedTarget: number): string {
     if (frame.attackers.length === 0) {
-      return '<section class="panel"><h2>lane</h2><p class="hint">nothing on the lane.</p></section>';
+      return (
+        '<section class="panel" data-group="lane"><h2>lane</h2>' +
+        '<p class="hint">nothing on the lane.</p></section>'
+      );
     }
-    let html = '<section class="panel"><h2>lane</h2><ul class="status-list">';
+    let html = '<section class="panel" data-group="lane"><h2>lane</h2><ul class="status-list">';
     for (let i = 0; i < frame.attackers.length; i++) {
       const unit = frame.attackers[i];
       html +=
@@ -301,7 +309,7 @@ export class RunPanels {
   ): string {
     const fraction = frameCount > 1 ? frameIndex / (frameCount - 1) : 0;
     let html =
-      '<section class="panel"><h2>replay</h2>' +
+      '<section class="panel" data-group="wave"><h2>replay</h2>' +
       '<div class="scrub"><input type="range" min="0" max="' +
       Math.max(0, frameCount - 1).toString() +
       '" value="' +
@@ -319,7 +327,7 @@ export class RunPanels {
       '<p class="hint"><kbd>,</kbd> and <kbd>.</kbd> step one frame. overlays work here ' +
       "exactly as they do in the editor.</p></section>";
 
-    html += '<section class="panel"><h2>first failure</h2>';
+    html += '<section class="panel" data-group="chain"><h2>first failure</h2>';
     if (firstFailed === null) {
       html += '<p class="ok">no joint sheared in this attempt.</p>';
     } else {
@@ -336,7 +344,7 @@ export class RunPanels {
     html += "</section>";
 
     html +=
-      '<section class="panel"><h2>failure chain</h2>' +
+      '<section class="panel" data-group="chain"><h2>failure chain</h2>' +
       RunPanels.failureChain(rows, frameIndex) +
       "</section>";
     return html;
@@ -352,7 +360,7 @@ export class RunPanels {
   ): string {
     const cause = RunPanels.causeOfLoss(record, outcome, rows);
     return (
-      '<section class="panel"><h2>' +
+      '<section class="panel" data-group="always"><h2>' +
       (record.survived ? "the design held" : "cause of loss") +
       "</h2>" +
       '<p class="callout"><span class="callout-value">' +
@@ -442,7 +450,7 @@ export class RunPanels {
     const forRepair = repairDetails * crewPerRepairDetail;
     const spare = crewPool - forGunners - forRepair - runners;
     return (
-      '<section class="panel"><h2>' +
+      '<section class="panel" data-group="always"><h2>' +
       (interWave ? "reassign between waves" : "allocate crew") +
       "</h2>" +
       '<p class="hint">one fixed pool for the whole run. no growth, no replacements. crew ' +

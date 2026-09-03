@@ -75,17 +75,47 @@ export class FieldRenderer {
   }
 
   /**
-   * Matches the backing store to the element's CSS size and the device pixel ratio, so the
-   * cross-section stays crisp on a retina display without the layers knowing about it.
+   * The backing store's ceiling (mobile UI spec 8.3).
+   *
+   * A phone has a slower core and up to nine times the fill cost per CSS pixel, and a
+   * three-times device pixel ratio across a full-bleed canvas is how a 60 fps target
+   * quietly becomes a 20 fps one. Capping the ratio at two and the store at 2.2 M pixels
+   * holds the render budget without touching the timestep, which 8.3 forbids: playback
+   * degrades, the timestep does not.
+   */
+  public static readonly MAX_PIXEL_RATIO: number = 2;
+  public static readonly MAX_BACKING_PIXELS: number = 2_200_000;
+
+  /**
+   * The effective device pixel ratio for a canvas of this CSS size.
+   *
+   * Never below one -- a store smaller than the element would be a blurry field, which
+   * costs more than the fill does -- and invisible to the layers, which already never see
+   * the ratio (8.3).
+   */
+  public static effectivePixelRatio(widthPx: number, heightPx: number, reported: number): number {
+    let ratio = reported > FieldRenderer.MAX_PIXEL_RATIO ? FieldRenderer.MAX_PIXEL_RATIO : reported;
+    const area = widthPx * heightPx;
+    if (area > 0 && area * ratio * ratio > FieldRenderer.MAX_BACKING_PIXELS) {
+      ratio = Math.sqrt(FieldRenderer.MAX_BACKING_PIXELS / area);
+    }
+    return ratio < 1 ? 1 : ratio;
+  }
+
+  /**
+   * Matches the backing store to the element's CSS size and the capped device pixel ratio,
+   * so the cross-section stays crisp on a retina display without the layers knowing about
+   * it.
    */
   public resize(): boolean {
-    const ratio = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
+    const reported = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
     const rect = this.canvas.getBoundingClientRect();
     const width = Math.max(1, Math.round(rect.width));
     const height = Math.max(1, Math.round(rect.height));
     if (width === this.widthPx && height === this.heightPx) {
       return false;
     }
+    const ratio = FieldRenderer.effectivePixelRatio(width, height, reported);
     this.widthPx = width;
     this.heightPx = height;
     this.canvas.width = Math.round(width * ratio);

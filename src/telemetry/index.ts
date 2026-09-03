@@ -7,6 +7,7 @@ export {
 } from "./AttemptRecord";
 export { AttemptExport } from "./AttemptExport";
 export { DesignMetrics } from "./DesignMetrics";
+export { DeviceProfile } from "./DeviceProfile";
 export { SampleSet } from "./SampleSet";
 export {
   ATTEMPT_COUNT_KEY,

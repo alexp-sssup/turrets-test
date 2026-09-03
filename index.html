@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      No `user-scalable=no` and no `maximum-scale` (mobile UI spec 8.2). A tester who needs
+      to magnify a joint gets to; the canvas owns its own gestures with `touch-action`, and
+      the page does not take the browser's away.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230d1015'/%3E%3Crect x='2' y='9' width='12' height='5' fill='%236d7480'/%3E%3Crect x='4' y='5' width='4' height='4' fill='%238a6234'/%3E%3Crect x='1' y='6' width='4' height='2' fill='%235fb2ff'/%3E%3C/svg%3E"
@@ -22,12 +27,23 @@
     <main class="stage">
       <div class="field-wrap">
         <canvas id="field"></canvas>
-        <p class="field-hint">
-          drag to place · shift-drag or right-drag to pan · wheel to zoom ·
-          <kbd>1</kbd>–<kbd>5</kbd> overlays · <kbd>[</kbd> <kbd>]</kbd> cross-section
-        </p>
+        <!--
+          The field control bar (mobile UI spec 4.2, 6.1): pinned to the field's bottom
+          edge, where a thumb is, rather than the top of the screen, where it is not. Empty
+          in `Wide`, where the shell still carries the overlay switcher.
+        -->
+        <div id="field-controls" class="field-controls"></div>
+        <p id="field-hint" class="field-hint"></p>
       </div>
-      <aside id="panels" class="panels"></aside>
+      <!--
+        The panel sheet of 4.3 and the edge drawer of 4.4 are the same element: the tab bar
+        selects one group, the panels below scroll, and in `Wide` the tab bar is empty and
+        this is the docked rail it has always been.
+      -->
+      <aside class="sheet">
+        <div id="sheet-tabs" class="sheet-tab-bar"></div>
+        <div id="panels" class="panels"></div>
+      </aside>
     </main>
     <footer id="shell-dev" class="dev"></footer>
     <noscript>

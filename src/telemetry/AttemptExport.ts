@@ -14,7 +14,11 @@ import { SessionSummary } from "./Telemetry";
  * The `notes` field of §7.4 is absent: note capture was cut from this build on request.
  */
 export class AttemptExport {
-  public static readonly FORMAT_VERSION: number = 1;
+  /**
+   * Two, since the mobile UI spec 9.1 device fields landed. One artifact, three uses, and
+   * still one file per attempt: the export stays the replay format and the batch input.
+   */
+  public static readonly FORMAT_VERSION: number = 2;
 
   public static toJson(record: AttemptRecord, summary: SessionSummary | null): string {
     return JSON.stringify(AttemptExport.toObject(record, summary));
@@ -117,6 +121,22 @@ export class AttemptExport {
           enclosedVolumeRatio: Number(record.design.enclosedVolumeRatio.toFixed(4)),
           fillRatio: Number(record.design.fillRatio.toFixed(4)),
           boundingVolume: record.design.boundingVolume,
+        },
+        device: {
+          layoutMode: record.device.layoutMode,
+          pointerKind: record.device.pointerKind,
+          viewportW: record.device.viewportW,
+          viewportH: record.device.viewportH,
+          devicePixelRatio: Number(record.device.devicePixelRatio.toFixed(3)),
+          orientationChanges: record.device.orientationChanges,
+          keyboardUsed: record.device.keyboardUsed,
+          gestureCounts: {
+            taps: record.device.taps,
+            drags: record.device.drags,
+            longPresses: record.device.longPresses,
+            pinches: record.device.pinches,
+            doubleTaps: record.device.doubleTaps,
+          },
         },
         resupply: {
           dryStationSeconds: Number(record.dryStationSeconds.toFixed(2)),

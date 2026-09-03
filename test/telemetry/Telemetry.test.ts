@@ -210,6 +210,74 @@ describe("AttemptExport", () => {
     assert.ok(parsed.blueprint.indexOf("standard turret") > 0);
   });
 
+  /**
+   * Mobile UI spec 9.1 and 9.2. Every §7.3 metric is reported segmented by `layoutMode`, so
+   * the segment has to be in the file: without it a compact-device attempt gets pooled into
+   * a single overall readability number, and §10's risk becomes invisible.
+   */
+  it("carries the device the attempt was flown on, at format 2 (mobile UI spec 9.1)", () => {
+    const telemetry = new Telemetry("mob001");
+    const record = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 7, 0);
+    record.device.layoutMode = "compact";
+    record.device.pointerKind = "coarse";
+    record.device.viewportW = 390;
+    record.device.viewportH = 844;
+    record.device.devicePixelRatio = 3;
+    record.device.orientationChanges = 2;
+    record.device.keyboardUsed = false;
+    record.device.taps = 14;
+    record.device.drags = 3;
+    record.device.longPresses = 5;
+    record.device.pinches = 2;
+    record.device.doubleTaps = 1;
+
+    const parsed = JSON.parse(AttemptExport.toJson(record, null)) as {
+      formatVersion: number;
+      metrics: {
+        device: {
+          layoutMode: string;
+          pointerKind: string;
+          viewportW: number;
+          viewportH: number;
+          devicePixelRatio: number;
+          orientationChanges: number;
+          keyboardUsed: boolean;
+          gestureCounts: {
+            taps: number;
+            drags: number;
+            longPresses: number;
+            pinches: number;
+            doubleTaps: number;
+          };
+        };
+      };
+    };
+
+    assert.equal(parsed.formatVersion, 2);
+    assert.equal(parsed.metrics.device.layoutMode, "compact");
+    assert.equal(parsed.metrics.device.pointerKind, "coarse");
+    assert.equal(parsed.metrics.device.viewportW, 390);
+    assert.equal(parsed.metrics.device.viewportH, 844);
+    // As reported, before the 8.3 cap: the cap is a rendering decision, not a fact about
+    // the tester's screen, and the analysis needs the fact.
+    assert.equal(parsed.metrics.device.devicePixelRatio, 3);
+    assert.equal(parsed.metrics.device.orientationChanges, 2);
+    assert.equal(parsed.metrics.device.keyboardUsed, false);
+    assert.equal(parsed.metrics.device.gestureCounts.taps, 14);
+    assert.equal(parsed.metrics.device.gestureCounts.drags, 3);
+    assert.equal(parsed.metrics.device.gestureCounts.longPresses, 5);
+    assert.equal(parsed.metrics.device.gestureCounts.pinches, 2);
+    assert.equal(parsed.metrics.device.gestureCounts.doubleTaps, 1);
+  });
+
+  it("defaults an attempt nobody touched to a fine pointer on a wide layout", () => {
+    const telemetry = new Telemetry("mob002");
+    const record = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 7, 0);
+    assert.equal(record.device.layoutMode, "wide");
+    assert.equal(record.device.pointerKind, "fine");
+    assert.equal(record.device.taps, 0);
+  });
+
   it("names the file after the session, the attempt and the design", () => {
     const telemetry = new Telemetry("zz9zz9");
     const record = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 1, 0);

@@ -51,7 +51,7 @@ Four screens and one persistent shell. The loop is Design → Allocate → Run �
 | Library | **[stub]** | Local list, fork, rename, JSON import/export. No sharing UI. |
 | Map / node selection | **[out]** | P2 |
 | Opponent view, spectator | **[out]** | P1 |
-| Touch / mobile layout | **[out]** | Desktop, mouse + keyboard only |
+| Touch / mobile layout | **[in]** | One build, responsive; see [mobile-ui.md](mobile-ui.md) |
 | Art, audio, VFX polish | **[out]** | Legibility over fidelity everywhere |
 
 ### 3.1 Design

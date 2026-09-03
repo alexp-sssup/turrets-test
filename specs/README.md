@@ -3,11 +3,17 @@
 The specifications this project is built from. **This directory is the source of
 truth**: the code implements the specs, the specs do not describe the code.
 
-Nothing has been uploaded here yet. The specs written so far still live in
-[`../docs/`](../docs) (`prototype-spec-p0.md`, `ui-spec-p0.md`,
-`structural-solver.md`); they will be moved or superseded here.
+What is here so far:
 
-Conventions once specs land:
+- [`prototype-spec-p0.md`](prototype-spec-p0.md) — P0, "One Turret, One Lane".
+- [`ui-spec-p0-tester-build.md`](ui-spec-p0-tester-build.md) — the browser tester build
+  on top of it.
+- [`mobile-ui.md`](mobile-ui.md) — touch and small screens, extending that one.
+
+`structural-solver.md` still lives in [`../docs/`](../docs), along with copies of the two
+P0 specs above; it will be moved or superseded here.
+
+Conventions:
 
 - One document per subject, named for the subject (`structural-solver.md`), not
   for a phase or a date.

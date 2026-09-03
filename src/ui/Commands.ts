@@ -1,4 +1,5 @@
 import { IVec3 } from "../core/IVec3";
+import { ViewMode } from "../render/ViewMode";
 import { OverlayMode, ViewState } from "../render/ViewState";
 
 /**
@@ -71,6 +72,15 @@ export enum ViewCommandKind {
    * desktop build and in the headless batch runner.
    */
   Fit = 7,
+  /**
+   * Flat or 2.5D (depth view spec 5).
+   *
+   * A view command like every other one here, and the reason that matters is stated in
+   * depth view spec 4.5: an attempt flown in the depth view has to replay identically in
+   * the flat one. Nothing about the projection is logged, and no `SimCommand` was added for
+   * it.
+   */
+  Mode = 8,
 }
 
 export class ViewCommand {
@@ -116,6 +126,10 @@ export class ViewCommand {
 
   public static fit(): ViewCommand {
     return new ViewCommand(ViewCommandKind.Fit, 0, 0, null);
+  }
+
+  public static mode(mode: ViewMode): ViewCommand {
+    return new ViewCommand(ViewCommandKind.Mode, mode as number, 0, null);
   }
 }
 
@@ -223,6 +237,10 @@ export class Dispatcher {
     }
     if (command.kind === ViewCommandKind.Fit) {
       this.fit.fitView();
+      return;
+    }
+    if (command.kind === ViewCommandKind.Mode) {
+      this.view.mode = command.value as ViewMode;
       return;
     }
     if (command.kind === ViewCommandKind.Zoom) {

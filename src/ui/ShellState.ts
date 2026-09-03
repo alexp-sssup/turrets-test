@@ -1,3 +1,4 @@
+import { ViewMode } from "../render/ViewMode";
 import { OverlayMode } from "../render/ViewState";
 import { LayoutMode } from "./LayoutMode";
 
@@ -22,6 +23,10 @@ export class ShellState {
   /** Load factor to show. The editor's before a run starts, the frame's once it has. */
   public margin: number;
   public overlay: OverlayMode;
+  /** Flat or 2.5D (depth view spec 5). Flat is what a session opens in. */
+  public viewMode: ViewMode;
+  /** Sections standing between the viewer and the working plane, cut away by the peel rule. */
+  public peeledSections: number;
   public slice: number;
   public sliceMin: number;
   public sliceMax: number;
@@ -79,6 +84,8 @@ export class ShellState {
     this.crewRunners = 0;
     this.margin = Number.POSITIVE_INFINITY;
     this.overlay = OverlayMode.Material;
+    this.viewMode = ViewMode.Flat;
+    this.peeledSections = 0;
     this.slice = 0;
     this.sliceMin = 0;
     this.sliceMax = 0;

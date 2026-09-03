@@ -44,8 +44,8 @@ export class PredictLayer implements Layer {
     const ctx = context.ctx;
 
     // The candidate itself.
-    const x = context.projection.screenX(focus.z);
-    const y = context.projection.screenY(focus.y);
+    const x = context.projection.screenXAt(focus.x, focus.z);
+    const y = context.projection.screenYAt(focus.x, focus.y);
     ctx.strokeStyle = Palette.accent;
     ctx.lineWidth = 2;
     ctx.setLineDash([3, 2]);
@@ -67,8 +67,8 @@ export class PredictLayer implements Layer {
     for (let i = 0; i < outcome.lostBlocks.length; i++) {
       const position = blueprint.blockAt(outcome.lostBlocks[i]).position;
       const onSlice = position.x === context.view.slice;
-      const left = context.projection.screenX(position.z);
-      const top = context.projection.screenY(position.y);
+      const left = context.projection.screenXAt(position.x, position.z);
+      const top = context.projection.screenYAt(position.x, position.y);
       ctx.globalAlpha = onSlice ? 0.55 : 0.2;
       ctx.fillStyle = Palette.danger;
       ctx.fillRect(left + 1, top + 1, scale - 2, scale - 2);

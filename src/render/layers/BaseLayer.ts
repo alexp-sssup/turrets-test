@@ -1,24 +1,31 @@
 import { IVec3 } from "../../core/IVec3";
-import { BlockKind } from "../../blueprint/BlockKind";
+import { DepthOrder } from "../DepthOrder";
 import { FieldFrame } from "../FieldFrame";
 import { DrawContext, Layer } from "../Layer";
 import { Palette } from "../Palette";
+import { SectionPainter } from "./SectionPainter";
 
 /**
  * The layer that always draws: the pad, the lane, and every cell's material, damage and
  * ignition (UI spec 4, overlay 1).
  *
- * Cells outside the drawn cross-section are ghosted rather than hidden. A tester needs to
- * know that the wall they are looking through has three more of itself behind it, and a
- * ghost costs nothing to read; hiding them would make a 5-wide turret look 1-wide.
+ * Cells outside the drawn cross-section are never hidden. A tester needs to know that the
+ * wall they are looking through has three more of itself behind it, and hiding them would
+ * make a 5-wide turret look 1-wide. What that costs differs by mode: the flat view ghosts
+ * them all into the same place, and the depth view gives each section its own place and
+ * applies the peel rule of depth view spec 3 -- solid and dimmed behind the working plane,
+ * cut back to an outline in front of it.
+ *
+ * The order the sections composite in comes from `DepthOrder`; what each one looks like
+ * comes from `SectionPainter`. This file is the ground, the framing and the marks that
+ * belong to no section in particular.
  */
 export class BaseLayer implements Layer {
   public readonly id: string = "base";
 
   public draw(context: DrawContext): void {
     this.drawGround(context);
-    this.drawGhostSlices(context);
-    this.drawSliceCells(context);
+    this.drawSections(context);
     this.drawInspection(context);
   }
 
@@ -28,20 +35,20 @@ export class BaseLayer implements Layer {
     const design = context.frame.design;
     const bounds = design.viewBounds;
     const scale = projection.scale;
+    const nearest = projection.axis.isFlat ? context.view.slice : design.sliceMin;
 
     ctx.fillStyle = Palette.sky;
     ctx.fillRect(0, 0, projection.widthPx, projection.heightPx);
 
-    // The ground line the lane and the pad both sit on.
-    const groundY = projection.screenY(design.pad.level - 1);
+    // The ground line the lane and the pad both sit on. In the depth view it is the nearest
+    // section's line: nothing may appear to float, so the fill starts at the front.
+    const groundY = projection.screenYAt(nearest, design.pad.level - 1);
     ctx.fillStyle = Palette.background;
     ctx.fillRect(0, groundY, projection.widthPx, projection.heightPx - groundY);
+    BaseLayer.drawRecedingGround(context, nearest);
 
     // The marked pad: the footprint the turret is allowed to stand on (spec 2).
-    const padLeft = projection.screenX(design.pad.minZ);
-    const padRight = projection.screenX(design.pad.maxZ + 1);
-    ctx.fillStyle = Palette.pad;
-    ctx.fillRect(padLeft, groundY, padRight - padLeft, scale * 0.35);
+    BaseLayer.drawPad(context);
     ctx.strokeStyle = Palette.padLine;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -49,14 +56,16 @@ export class BaseLayer implements Layer {
     ctx.lineTo(projection.widthPx, Math.round(groundY) + 0.5);
     ctx.stroke();
 
-    // A faint voxel grid, so a tester can count reach without measuring pixels.
+    // A faint voxel grid, so a tester can count reach without measuring pixels. Drawn in the
+    // working plane only: a grid per section would be five grids and no reference.
     if (scale >= 12) {
+      const planeGroundY = projection.screenY(design.pad.level - 1);
       ctx.strokeStyle = Palette.grid;
       ctx.beginPath();
       for (let z = bounds.min.z; z <= bounds.min.z + bounds.size.z; z++) {
         const x = Math.round(projection.screenX(z)) + 0.5;
         ctx.moveTo(x, 0);
-        ctx.lineTo(x, groundY);
+        ctx.lineTo(x, planeGroundY);
       }
       for (let y = design.pad.level; y <= bounds.min.y + bounds.size.y; y++) {
         const screenY = Math.round(projection.screenY(y - 1)) + 0.5;
@@ -80,107 +89,69 @@ export class BaseLayer implements Layer {
     ctx.fillText("gun range", rangeEdge + 4, 12);
   }
 
-  /** Blocks in the other cross-sections, so the slice is read as a slice. */
-  private drawGhostSlices(context: DrawContext): void {
-    const ctx = context.ctx;
-    const frame = context.frame;
-    const blueprint = frame.design.blueprint;
-    const scale = context.projection.scale;
-    ctx.fillStyle = Palette.ghost;
-    for (let i = 0; i < blueprint.blockCount; i++) {
-      if (!frame.isAlive(i)) {
-        continue;
-      }
-      const position = blueprint.blockAt(i).position;
-      if (position.x === context.view.slice) {
-        continue;
-      }
-      const x = context.projection.screenX(position.z);
-      const y = context.projection.screenY(position.y);
-      ctx.fillRect(x + 2, y + 2, scale - 4, scale - 4);
+  /**
+   * The floor between the nearest section and the farthest, as one receding band.
+   *
+   * Without it the depth view's sections stand on nothing and the projection reads as a
+   * stack of flat cards. Nothing in the flat view, where the two sections coincide.
+   */
+  private static drawRecedingGround(context: DrawContext, nearest: number): void {
+    const projection = context.projection;
+    if (projection.axis.isFlat) {
+      return;
     }
+    const design = context.frame.design;
+    const bounds = design.viewBounds;
+    const farthest = design.sliceMax + 1;
+    const level = design.pad.level - 1;
+    const leftZ = bounds.min.z;
+    const rightZ = bounds.min.z + bounds.size.z;
+    const ctx = context.ctx;
+    ctx.fillStyle = Palette.groundPlane;
+    ctx.beginPath();
+    ctx.moveTo(projection.screenXAt(nearest, leftZ), projection.screenYAt(nearest, level));
+    ctx.lineTo(projection.screenXAt(nearest, rightZ), projection.screenYAt(nearest, level));
+    ctx.lineTo(projection.screenXAt(farthest, rightZ), projection.screenYAt(farthest, level));
+    ctx.lineTo(projection.screenXAt(farthest, leftZ), projection.screenYAt(farthest, level));
+    ctx.closePath();
+    ctx.fill();
   }
 
-  private drawSliceCells(context: DrawContext): void {
+  /** The pad, as the parallelogram its footprint projects to. A rectangle in the flat view. */
+  private static drawPad(context: DrawContext): void {
+    const projection = context.projection;
+    const design = context.frame.design;
     const ctx = context.ctx;
-    const frame = context.frame;
-    const blueprint = frame.design.blueprint;
-    const scale = context.projection.scale;
-
-    for (let i = 0; i < blueprint.blockCount; i++) {
-      const block = blueprint.blockAt(i);
-      if (block.position.x !== context.view.slice) {
-        continue;
-      }
-      const x = context.projection.screenX(block.position.z);
-      const y = context.projection.screenY(block.position.y);
-
-      if (!frame.isAlive(i)) {
-        // A hole where a block used to be. Drawn, because "what did I lose" is the first
-        // question the replay has to answer.
-        ctx.strokeStyle = "rgba(255,92,92,0.30)";
-        ctx.setLineDash([2, 3]);
-        ctx.strokeRect(x + 1.5, y + 1.5, scale - 3, scale - 3);
-        ctx.setLineDash([]);
-        continue;
-      }
-
-      const burning = frame.isBurning(i);
-      const damage = frame.damageFraction(i);
-      ctx.fillStyle = burning ? Palette.fireFill(damage) : Palette.materialFill(block.material);
-      ctx.fillRect(x + 1, y + 1, scale - 2, scale - 2);
-
-      // Damage darkens the cell rather than recolouring it, so material stays readable
-      // right up to the point the block dies.
-      if (damage > 0) {
-        ctx.fillStyle = "rgba(0,0,0," + (damage * 0.55).toFixed(3) + ")";
-        ctx.fillRect(x + 1, y + 1, scale - 2, scale - 2);
-      }
-
-      ctx.strokeStyle = Palette.materialEdge(block.material);
+    const near = projection.axis.isFlat ? context.view.slice : design.pad.minX;
+    const far = projection.axis.isFlat ? context.view.slice : design.pad.maxX + 1;
+    const level = design.pad.level - 1;
+    const depthPx = projection.axis.isFlat ? projection.scale * 0.35 : 0;
+    const leftZ = design.pad.minZ;
+    const rightZ = design.pad.maxZ + 1;
+    ctx.fillStyle = Palette.pad;
+    ctx.beginPath();
+    ctx.moveTo(projection.screenXAt(near, leftZ), projection.screenYAt(near, level) + depthPx);
+    ctx.lineTo(projection.screenXAt(near, rightZ), projection.screenYAt(near, level) + depthPx);
+    ctx.lineTo(projection.screenXAt(far, rightZ), projection.screenYAt(far, level));
+    ctx.lineTo(projection.screenXAt(far, leftZ), projection.screenYAt(far, level));
+    ctx.closePath();
+    ctx.fill();
+    if (!projection.axis.isFlat) {
+      // The footprint's outline, so the pad stays a marked area rather than a shade of the
+      // floor it is drawn on. The flat view keeps the band it always had.
+      ctx.strokeStyle = Palette.padLine;
       ctx.lineWidth = 1;
-      ctx.strokeRect(x + 1.5, y + 1.5, scale - 3, scale - 3);
-
-      if (block.kind !== BlockKind.Structural) {
-        BaseLayer.drawKindBadge(context, block.kind, i, x, y, scale);
-      }
-      if (burning) {
-        ctx.fillStyle = "rgba(255,220,120,0.85)";
-        ctx.fillRect(x + scale * 0.5 - 1, y + 2, 2, scale * 0.3);
-      }
+      ctx.stroke();
     }
   }
 
-  private static drawKindBadge(
-    context: DrawContext,
-    kind: BlockKind,
-    block: number,
-    x: number,
-    y: number,
-    scale: number
-  ): void {
-    const ctx = context.ctx;
-    ctx.strokeStyle = Palette.kindColour(kind);
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 2.5, y + 2.5, scale - 5, scale - 5);
-    if (scale >= 16) {
-      ctx.fillStyle = Palette.kindColour(kind);
-      ctx.font = Math.round(scale * 0.5).toString() + "px ui-monospace, monospace";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(Palette.kindGlyph(kind), x + scale * 0.5, y + scale * 0.52);
-      ctx.textAlign = "left";
-      ctx.textBaseline = "alphabetic";
+  /** Every cross-section, back to front, each in the treatment its cue asks for. */
+  private drawSections(context: DrawContext): void {
+    const design = context.frame.design;
+    const order = new DepthOrder(design.sliceMin, design.sliceMax, context.view.slice, context.view.mode);
+    for (let i = 0; i < order.count; i++) {
+      SectionPainter.paint(context, order.cues[i]);
     }
-    // A depot that is nearly full is worth flagging even on the base layer: it is the one
-    // block whose contents can end the run.
-    const depot = context.frame.depotAt(block);
-    if (kind === BlockKind.Depot && depot !== null && depot.fillFraction > 0) {
-      const height = (scale - 6) * depot.fillFraction;
-      ctx.fillStyle = "rgba(255,180,58,0.55)";
-      ctx.fillRect(x + 3, y + scale - 3 - height, 3, height);
-    }
-    ctx.lineWidth = 1;
   }
 
   private drawInspection(context: DrawContext): void {
@@ -202,8 +173,8 @@ export class BaseLayer implements Layer {
   private static outline(context: DrawContext, cell: IVec3, colour: string, width: number): void {
     const ctx = context.ctx;
     const scale = context.projection.scale;
-    const x = context.projection.screenX(cell.z);
-    const y = context.projection.screenY(cell.y);
+    const x = context.projection.screenXAt(cell.x, cell.z);
+    const y = context.projection.screenYAt(cell.x, cell.y);
     ctx.strokeStyle = colour;
     ctx.lineWidth = width;
     ctx.strokeRect(x + 0.5, y + 0.5, scale - 1, scale - 1);
@@ -223,17 +194,19 @@ export class BaseLayer implements Layer {
     const scale = context.projection.scale;
 
     const highPosition = blueprint.blockAt(high).position;
+    let midX = highPosition.x;
     let midZ = highPosition.z;
     let midY = highPosition.y;
     if (low >= 0) {
       const lowPosition = blueprint.blockAt(low).position;
+      midX = (lowPosition.x + highPosition.x) * 0.5;
       midZ = (lowPosition.z + highPosition.z) * 0.5;
       midY = (lowPosition.y + highPosition.y) * 0.5;
     } else {
       midY = highPosition.y - 0.5;
     }
-    const x = context.projection.screenX(midZ) + scale * 0.5;
-    const y = context.projection.screenY(midY) + scale * 0.5;
+    const x = context.projection.screenXAt(midX, midZ) + scale * 0.5;
+    const y = context.projection.screenYAt(midX, midY) + scale * 0.5;
     ctx.strokeStyle = Palette.danger;
     ctx.lineWidth = 2;
     ctx.beginPath();

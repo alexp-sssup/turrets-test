@@ -83,6 +83,25 @@ would be a picture of something that is not there.
 Going to 3D replaces `render/` and the editor's placement input. `sim/` and `structure/` never
 learn about it.
 
+### The 2.5D depth view, and how you see inside a multilayer turret
+
+`v` toggles a second projection over the same scene, specified in
+[specs/20260903-depth-view.md](../specs/20260903-depth-view.md). It is a fixed oblique
+projection — one constant screen offset per section, up and to the right, no camera and no
+rotation — and the flat cross-section stays the default.
+
+The question it answers is the one the flat view cannot: a five-wide turret's other four
+sections all land in the same place there, so a wall and a corridor are the same grey smear.
+The answer is a rule rather than a slider. **The active cross-section is never occluded:
+everything nearer the viewer is peeled back to an outline, everything behind it is drawn
+solid and dimmed with distance.** The peel plane is the active section, so `[` and `]` are
+still the only depth control — stepping toward the viewer takes one more wall off the front.
+
+Three things fall out of measuring the depth offset from the active section rather than from
+the world origin: the section you are working in does not move when you toggle the mode,
+screen-to-world still resolves in exactly one plane (so a click is never a picking problem),
+and the flat view is the same code with the offset set to zero.
+
 ### Playback and simulation are separate clocks
 
 A structural re-solve costs 60–300 ms at P0 sizes and happens a hundred-odd times in a

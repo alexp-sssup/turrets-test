@@ -3,7 +3,9 @@
 Deterministic implementation of the P0 prototype spec in
 [specs/20260902-prototype-spec-p0.md](specs/20260902-prototype-spec-p0.md), plus the
 browser tester build specified in
-[specs/20260902-ui-spec-p0-tester-build.md](specs/20260902-ui-spec-p0-tester-build.md).
+[specs/20260902-ui-spec-p0-tester-build.md](specs/20260902-ui-spec-p0-tester-build.md) and
+its [mobile](specs/20260903-mobile-ui.md) and [2.5D depth view](specs/20260903-depth-view.md)
+extensions.
 
 The simulation core is headless and stays that way: it has no DOM reference of any kind, and
 CI fails if one appears (`npm run check:boundary`). The renderer sits on top of it and reads
@@ -32,7 +34,9 @@ npm run build:web  # typecheck + boundary check + static files into dist-web/
 ```
 
 The tester build is four screens and a persistent shell -- design, allocate, run, replay --
-over a side-on 2D cross-section of the same simulation the harness runs. It is static files
+over a side-on 2D cross-section of the same simulation the harness runs, with an optional
+2.5D depth view (`v`) that gives the third axis a place on screen and cuts away whatever
+stands in front of the cross-section being worked in. It is static files
 behind one URL, published to GitHub Pages from
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml); Pages has to be switched on
 once under Settings -> Pages -> Source: GitHub Actions, which a workflow token is not allowed

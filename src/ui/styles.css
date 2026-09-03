@@ -837,6 +837,17 @@ ul.library-list li {
   color: var(--accent);
 }
 
+/* Depth view spec 5: the toggle reads as on, so the mode is legible without pressing it. */
+.field-button.view-mode {
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+}
+
+.field-button.view-mode.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* 6.1: the active one is named. At 390 px the other four are their number and nothing else. */
 :root[data-layout="compact"] .field-key:not(.active) .field-key-name {
   display: none;

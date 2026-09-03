@@ -45,10 +45,10 @@ export class ArcsLayer implements Layer {
       return;
     }
     const centre = samples[(samples.length - 1) >> 1];
-    const originX = context.projection.screenX(position.z) + scale * 0.5;
-    const originY = context.projection.screenY(position.y) + scale * 0.5;
+    const originX = context.projection.screenXAt(position.x, position.z) + scale * 0.5;
+    const originY = context.projection.screenYAt(position.x, position.y) + scale * 0.5;
     const endZ = position.z + centre.dirZ * centre.steps;
-    const endX = context.projection.screenX(endZ) + scale * 0.5;
+    const endX = context.projection.screenXAt(position.x, endZ) + scale * 0.5;
 
     ctx.globalAlpha = onSlice ? 1 : 0.3;
     ctx.strokeStyle = centre.clear ? "rgba(95,178,255,0.75)" : Palette.danger;
@@ -62,8 +62,8 @@ export class ArcsLayer implements Layer {
 
     if (!centre.clear && centre.blockedBy >= 0) {
       const blocker = blueprint.blockAt(centre.blockedBy).position;
-      const bx = context.projection.screenX(blocker.z);
-      const by = context.projection.screenY(blocker.y);
+      const bx = context.projection.screenXAt(blocker.x, blocker.z);
+      const by = context.projection.screenYAt(blocker.x, blocker.y);
       ctx.strokeStyle = Palette.danger;
       ctx.lineWidth = 2;
       ctx.strokeRect(bx + 0.5, by + 0.5, scale - 1, scale - 1);

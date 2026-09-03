@@ -1,3 +1,4 @@
+import { ViewMode, viewModeName } from "../render/ViewMode";
 import { OVERLAY_COUNT, OverlayMode, overlayName } from "../render/ViewState";
 import { Dom } from "./Dom";
 import { ShellState } from "./ShellState";
@@ -58,6 +59,9 @@ export class FieldControls {
     new InputHint("fit", "", "", "double-tap to fit"),
     new InputHint("overlay", "1–5", "1–5 overlays", "overlay row below"),
     new InputHint("cross-section", "[ ]", "[ ] cross-section", "slice stepper below"),
+    // Depth view spec 5: one new binding and no new verbs. `[` and `]` already move the
+    // peel plane, because the peel plane is the cross-section.
+    new InputHint("depth", "v", "v flat / 2.5D", "flat / 2.5D toggle below"),
     new InputHint("undo", "z", "", ""),
     new InputHint("redo", "y", "", ""),
     new InputHint("pause", "space", "", ""),
@@ -226,10 +230,31 @@ export class FieldControls {
         (state.paused ? "play" : "pause") +
         "</button>";
     }
+    html += FieldControls.viewModeControl(state);
     html += '<button class="field-button" data-action="fit">fit</button>';
     html += FieldControls.devChip(state);
     html += "</span>";
     return html;
+  }
+
+  /**
+   * The flat / 2.5D toggle (depth view spec 5).
+   *
+   * It names the mode that is *on* rather than the one it would switch to, for the reason
+   * 6.1 gives the overlay row: a control that names a state the tester cannot see is a
+   * control they have to press to read.
+   */
+  public static viewModeControl(state: ShellState): string {
+    const depth = state.viewMode === ViewMode.Depth;
+    return (
+      '<button class="field-button view-mode' +
+      (depth ? " active" : "") +
+      '" data-action="view-mode" title="' +
+      FieldControls.keyFor("depth") +
+      '">' +
+      Dom.escape(viewModeName(state.viewMode)) +
+      "</button>"
+    );
   }
 
   private static scrub(state: ShellState): string {
@@ -266,10 +291,25 @@ export class FieldControls {
       count.toString() +
       " block" +
       (count === 1 ? "" : "s") +
+      FieldControls.peelNote(state) +
       "</button>" +
       '<button class="field-button" data-action="slice-step" data-value="1">▶</button>' +
       "</span>"
     );
+  }
+
+  /**
+   * How many sections the depth view has cut away in front of the working plane
+   * (depth view spec 5).
+   *
+   * A cutaway a tester has not noticed reads as a missing wall, and a tester who thinks
+   * they have lost a wall will go and rebuild one they already have.
+   */
+  public static peelNote(state: ShellState): string {
+    if (state.viewMode !== ViewMode.Depth || state.peeledSections <= 0) {
+      return "";
+    }
+    return " · " + state.peeledSections.toString() + " in front";
   }
 
   /**
@@ -320,7 +360,12 @@ export class FieldControls {
         x.toString() +
         "</button>";
     }
-    html += '<span class="shell-sub">' + Dom.escape(FieldControls.keyFor("cross-section")) + " to move</span></span>";
+    html +=
+      '<span class="shell-sub">' +
+      Dom.escape(FieldControls.keyFor("cross-section")) +
+      " to move" +
+      Dom.escape(FieldControls.peelNote(state)) +
+      "</span></span>";
     return html;
   }
 

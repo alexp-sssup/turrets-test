@@ -32,8 +32,8 @@ export class LogisticsLayer implements Layer {
     const scale = context.projection.scale;
     const blueprint = context.frame.design.blueprint;
     const stationPosition = blueprint.blockAt(station.block).position;
-    const anchorX = context.projection.screenX(stationPosition.z) + scale * 0.5;
-    const anchorY = context.projection.screenY(stationPosition.y) + scale * 0.5;
+    const anchorX = context.projection.screenXAt(stationPosition.x, stationPosition.z) + scale * 0.5;
+    const anchorY = context.projection.screenYAt(stationPosition.x, stationPosition.y) + scale * 0.5;
 
     const path = station.depotPath;
     if (path === null || station.status === StationStatus.NoPath) {
@@ -81,12 +81,12 @@ export class LogisticsLayer implements Layer {
       ctx.setLineDash(onSlice ? [] : [3, 3]);
       ctx.beginPath();
       ctx.moveTo(
-        context.projection.screenX(from.z) + scale * 0.5,
-        context.projection.screenY(from.y) + scale * 0.5
+        context.projection.screenXAt(from.x, from.z) + scale * 0.5,
+        context.projection.screenYAt(from.x, from.y) + scale * 0.5
       );
       ctx.lineTo(
-        context.projection.screenX(to.z) + scale * 0.5,
-        context.projection.screenY(to.y) + scale * 0.5
+        context.projection.screenXAt(to.x, to.z) + scale * 0.5,
+        context.projection.screenYAt(to.x, to.y) + scale * 0.5
       );
       ctx.stroke();
     }
@@ -97,8 +97,8 @@ export class LogisticsLayer implements Layer {
     ctx.fillStyle = Palette.warning;
     ctx.beginPath();
     ctx.arc(
-      context.projection.screenX(end.z) + scale * 0.5,
-      context.projection.screenY(end.y) + scale * 0.5,
+      context.projection.screenXAt(end.x, end.z) + scale * 0.5,
+      context.projection.screenYAt(end.x, end.y) + scale * 0.5,
       3,
       0,
       Math.PI * 2
@@ -114,8 +114,8 @@ export class LogisticsLayer implements Layer {
     for (let i = 0; i < frame.depots.length; i++) {
       const depot = frame.depots[i];
       const position = blueprint.blockAt(depot.block).position;
-      const x = context.projection.screenX(position.z);
-      const y = context.projection.screenY(position.y);
+      const x = context.projection.screenXAt(position.x, position.z);
+      const y = context.projection.screenYAt(position.x, position.y);
       const onSlice = position.x === context.view.slice;
       ctx.globalAlpha = onSlice ? 1 : 0.35;
 

@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
+import { ViewMode } from "../../src/render/ViewMode";
 import { OverlayMode } from "../../src/render/ViewState";
 import { FieldControls } from "../../src/ui/FieldControls";
 import { ShellState } from "../../src/ui/ShellState";
@@ -61,6 +62,52 @@ describe("FieldControls", () => {
     assert.equal(FieldControls.keyFor("pause"), "space");
     assert.equal(FieldControls.keyFor("frame step"), ", .");
     assert.equal(FieldControls.keyFor("deselect"), "escape");
+    assert.equal(FieldControls.keyFor("depth"), "v");
+  });
+
+  /**
+   * Depth view spec 5: one new binding and no new verbs, and the toggle names the mode that
+   * is *on* rather than the one it would switch to.
+   */
+  it("puts the flat / 2.5D toggle on screen and names the mode that is on", () => {
+    const state = stateWithSlices(4, false);
+    const flat = FieldControls.render(state);
+    assert.ok(flat.indexOf('data-action="view-mode"') >= 0);
+    assert.ok(flat.indexOf(">flat</button>") >= 0);
+    assert.equal(flat.indexOf("view-mode active"), -1);
+
+    state.viewMode = ViewMode.Depth;
+    const depth = FieldControls.render(state);
+    assert.ok(depth.indexOf(">2.5D</button>") >= 0);
+    assert.ok(depth.indexOf("view-mode active") >= 0);
+
+    // The caption is built from the same row, so the binding cannot drift from its caption.
+    assert.ok(FieldControls.caption(false).indexOf("<kbd>v</kbd> flat / 2.5D") >= 0);
+    assert.equal(FieldControls.caption(true).indexOf("<kbd>"), -1);
+  });
+
+  /**
+   * Depth view spec 5: a cutaway a tester has not noticed reads as a missing wall, so the
+   * section readout says how many sections the peel has taken off the front.
+   */
+  it("names the peel in the section readout, and only in the depth view", () => {
+    const stepper = stateWithSlices(48, true);
+    stepper.slice = 3;
+    assert.equal(FieldControls.sliceControl(stepper).indexOf("in front"), -1);
+
+    stepper.viewMode = ViewMode.Depth;
+    stepper.peeledSections = 3;
+    assert.ok(FieldControls.sliceControl(stepper).indexOf("x = 3 · 12 blocks · 3 in front") >= 0);
+
+    // Nothing in front of the working plane is nothing to say.
+    stepper.peeledSections = 0;
+    assert.equal(FieldControls.sliceControl(stepper).indexOf("in front"), -1);
+
+    // The strip carries the same note, from the same helper.
+    const strip = stateWithSlices(4, false);
+    strip.viewMode = ViewMode.Depth;
+    strip.peeledSections = 2;
+    assert.ok(FieldControls.sliceControl(strip).indexOf("2 in front") >= 0);
   });
 
   /** 4.5: the stepper replaces the strip on a width question, not a device question. */

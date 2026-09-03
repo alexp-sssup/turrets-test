@@ -53,6 +53,8 @@ export class Telemetry {
   private currentAttempt: AttemptRecord | null;
   private overlay: OverlayMode;
   private overlaySinceMs: number;
+  /** Whether the depth view is the one on screen, for the dwell of depth view spec 8. */
+  private depthView: boolean;
   private running: boolean;
   private replayWatchedAtMs: number;
   private lastFirstFailedJoint: JointRef | null;
@@ -66,6 +68,7 @@ export class Telemetry {
     // -1 rather than 0: a clock that legitimately starts at zero must not be mistaken for
     // an unset one, or the first interval of every session goes uncharged.
     this.overlaySinceMs = -1;
+    this.depthView = false;
     this.running = false;
     this.replayWatchedAtMs = 0;
     this.lastFirstFailedJoint = null;
@@ -119,7 +122,7 @@ export class Telemetry {
     if (record === null) {
       return;
     }
-    this.chargeOverlayDwell(nowMs);
+    this.chargeDwell(nowMs);
     record.outcome = outcome;
     record.firstFailedJoint = firstFailedJoint;
     if (firstFailedJoint !== null) {
@@ -130,7 +133,7 @@ export class Telemetry {
 
   /** Charges dwell to the outgoing overlay and starts the clock on the incoming one. */
   public noteOverlay(overlay: OverlayMode, nowMs: number): void {
-    this.chargeOverlayDwell(nowMs);
+    this.chargeDwell(nowMs);
     this.overlay = overlay;
     if (this.running && overlay === OverlayMode.Predict && this.currentAttempt !== null) {
       // §4: "predict is live during a run". Whether testers actually use it there is the
@@ -140,8 +143,25 @@ export class Telemetry {
   }
 
   public noteRunning(running: boolean, nowMs: number): void {
-    this.chargeOverlayDwell(nowMs);
+    this.chargeDwell(nowMs);
     this.running = running;
+  }
+
+  /**
+   * Charges the outgoing view mode and starts the clock on the incoming one
+   * (depth view spec 8).
+   *
+   * Same shape as `noteOverlay` and on the same clock, because the two questions are asked
+   * together: an overlay a tester read in the depth view and an overlay they read flat are
+   * not the same reading.
+   */
+  public noteViewMode(depthView: boolean, nowMs: number): void {
+    this.chargeDwell(nowMs);
+    this.depthView = depthView;
+    const record = this.currentAttempt;
+    if (depthView && !this.running && record !== null) {
+      record.depthViewOpenedBeforeRun = true;
+    }
   }
 
   public noteReplayOpened(nowMs: number): void {
@@ -212,10 +232,15 @@ export class Telemetry {
     );
   }
 
-  private chargeOverlayDwell(nowMs: number): void {
+  /** Charges the interval since the last boundary to the overlay and the mode it was read in. */
+  private chargeDwell(nowMs: number): void {
     const record = this.currentAttempt;
     if (record !== null && this.overlaySinceMs >= 0 && nowMs > this.overlaySinceMs) {
-      record.overlayDwell.add(this.overlay, (nowMs - this.overlaySinceMs) / 1000, this.running);
+      const seconds = (nowMs - this.overlaySinceMs) / 1000;
+      record.overlayDwell.add(this.overlay, seconds, this.running);
+      if (this.depthView) {
+        record.depthViewSeconds += seconds;
+      }
     }
     this.overlaySinceMs = nowMs;
   }

@@ -28,8 +28,8 @@ export class ActorLayer implements Layer {
     for (let i = 0; i < attackers.length; i++) {
       const unit: AttackerSnapshot = attackers[i];
       const onSlice = unit.laneX === context.view.slice;
-      const x = context.projection.screenX(unit.laneZ) + scale * 0.5;
-      const groundY = context.projection.screenY(context.frame.design.pad.level);
+      const x = context.projection.screenXAt(unit.laneX, unit.laneZ) + scale * 0.5;
+      const groundY = context.projection.screenYAt(unit.laneX, context.frame.design.pad.level);
       const height = scale * 1.1;
       const width = scale * 0.55;
 
@@ -84,8 +84,8 @@ export class ActorLayer implements Layer {
       const station: StationSnapshot = frame.stations[i];
       const position = blueprint.blockAt(station.block).position;
       const onSlice = position.x === context.view.slice;
-      const x = context.projection.screenX(position.z);
-      const y = context.projection.screenY(position.y);
+      const x = context.projection.screenXAt(position.x, position.z);
+      const y = context.projection.screenYAt(position.x, position.y);
 
       if (station.firedThisTick && onSlice) {
         // Muzzle flash, pointing the way the gun faces (-z: down the lane).
@@ -153,8 +153,8 @@ export class ActorLayer implements Layer {
     for (let i = 0; i < crew.length; i++) {
       const member: CrewSnapshot = crew[i];
       const onSlice = Math.round(member.x) === context.view.slice;
-      const x = context.projection.screenX(member.z) + scale * 0.5;
-      const y = context.projection.screenY(member.y) + scale * 0.75;
+      const x = context.projection.screenXAt(member.x, member.z) + scale * 0.5;
+      const y = context.projection.screenYAt(member.x, member.y) + scale * 0.75;
       ctx.globalAlpha = onSlice ? 1 : 0.3;
       ctx.fillStyle = Palette.crewColour(member.role);
       ctx.beginPath();

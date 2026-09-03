@@ -92,6 +92,17 @@ export class AttemptRecord {
   public replayWatchFraction: number;
   public replayScrubCount: number;
   public readonly overlayDwell: OverlayDwell;
+  /**
+   * Seconds spent in the 2.5D depth view, and whether it was opened before the wave
+   * (depth view spec 8).
+   *
+   * The mode earns its place if attempts that used it fix the joint more often than
+   * attempts that did not, and does not if it is only ever opened after the turret has
+   * already fallen over. Neither question can be asked of a tester directly, for the same
+   * reason UI spec 7.3 gives for every other field here.
+   */
+  public depthViewSeconds: number;
+  public depthViewOpenedBeforeRun: boolean;
   public solverMsP95: number;
   public solverMsMax: number;
   public renderMsP95: number;
@@ -138,6 +149,8 @@ export class AttemptRecord {
     this.replayWatchFraction = 0;
     this.replayScrubCount = 0;
     this.overlayDwell = new OverlayDwell();
+    this.depthViewSeconds = 0;
+    this.depthViewOpenedBeforeRun = false;
     this.solverMsP95 = 0;
     this.solverMsMax = 0;
     this.renderMsP95 = 0;

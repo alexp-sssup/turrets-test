@@ -132,6 +132,32 @@ describe("Telemetry", () => {
     assert.equal(record.overlayDwell.consultedSolverBeforeRun, true);
   });
 
+  /**
+   * Depth view spec 8: the mode earns its place if it is a diagnosis tool rather than a
+   * sightseeing one, and a tester cannot be asked which it was for them.
+   */
+  it("charges the seconds spent in the depth view, and whether it opened before the run", () => {
+    const telemetry = new Telemetry("abc123");
+    const record = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 1, 0);
+
+    telemetry.noteViewMode(true, 1000); // one flat second, then the depth view goes on
+    assert.equal(record.depthViewOpenedBeforeRun, true);
+    telemetry.noteRunning(true, 4000); // three seconds of it before the wave
+    telemetry.noteViewMode(false, 7000); // three more during it, then back to flat
+    telemetry.finishAttempt(AttemptOutcome.Lost, null, 9000);
+
+    assert.ok(Math.abs(record.depthViewSeconds - 6) < 1e-9, "six seconds, flat time excluded");
+
+    // A tester who only reaches for it after the turret has fallen over is the case the
+    // field exists to separate, so opening it mid-run does not count as before the run.
+    const second = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 1, 10000);
+    telemetry.noteRunning(true, 10000);
+    telemetry.noteViewMode(true, 11000);
+    assert.equal(second.depthViewOpenedBeforeRun, false);
+    telemetry.finishAttempt(AttemptOutcome.Lost, null, 13000);
+    assert.ok(Math.abs(second.depthViewSeconds - 2) < 1e-9);
+  });
+
   it("tracks how much of a replay was watched and how hard it was to find the moment", () => {
     const telemetry = new Telemetry("abc123");
     const record = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 1, 0);
@@ -253,7 +279,7 @@ describe("AttemptExport", () => {
       };
     };
 
-    assert.equal(parsed.formatVersion, 2);
+    assert.equal(parsed.formatVersion, 3);
     assert.equal(parsed.metrics.device.layoutMode, "compact");
     assert.equal(parsed.metrics.device.pointerKind, "coarse");
     assert.equal(parsed.metrics.device.viewportW, 390);

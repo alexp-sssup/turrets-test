@@ -73,6 +73,11 @@ export class StressLayer implements Layer {
   ): void {
     const scale = context.projection.scale;
     const thickness = scale * 0.17 < 3 ? 3 : scale * 0.17;
+    // The section the mark belongs in. For every joint but one that is the section both its
+    // blocks stand in; for a joint normal to the cross-section it is the midpoint between
+    // the two, which is the cell centre in the flat view and a place of its own in the
+    // depth view (depth view spec 6.2).
+    const section = low === null ? high.x : (low.x + high.x) * 0.5;
 
     let left: number;
     let top: number;
@@ -82,29 +87,30 @@ export class StressLayer implements Layer {
     if (low === null) {
       // A support: the pad pushing back under the block. It never pulls, which is what
       // makes overturning fall out of the solver rather than needing a rule.
-      left = context.projection.screenX(high.z) + scale * 0.15;
-      top = context.projection.screenY(high.y) + scale - thickness * 0.5;
+      left = context.projection.screenXAt(section, high.z) + scale * 0.15;
+      top = context.projection.screenYAt(section, high.y) + scale - thickness * 0.5;
       width = scale * 0.7;
       height = thickness;
     } else if (low.y !== high.y) {
       const lower = low.y < high.y ? low : high;
-      left = context.projection.screenX(lower.z) + scale * 0.15;
-      top = context.projection.screenY(lower.y) - thickness * 0.5;
+      left = context.projection.screenXAt(section, lower.z) + scale * 0.15;
+      top = context.projection.screenYAt(section, lower.y) - thickness * 0.5;
       width = scale * 0.7;
       height = thickness;
     } else if (low.z !== high.z) {
       const nearer = low.z < high.z ? low : high;
-      left = context.projection.screenX(nearer.z + 1) - thickness * 0.5;
-      top = context.projection.screenY(nearer.y) + scale * 0.15;
+      left = context.projection.screenXAt(section, nearer.z + 1) - thickness * 0.5;
+      top = context.projection.screenYAt(section, nearer.y) + scale * 0.15;
       width = thickness;
       height = scale * 0.7;
     } else {
-      // The face is perpendicular to the cross-section: this joint runs into the screen.
-      // Drawn as a small square at the cell's centre, so it is visible without pretending
-      // to have an extent it does not have in this projection.
+      // The face is perpendicular to the cross-section. In the flat view it runs straight
+      // into the screen and gets a small square at the cell's centre rather than an extent
+      // it does not have; in the depth view the same square lands between the two sections
+      // it joins, which is where the lateral bracing of a wide turret becomes visible.
       const side = thickness * 1.3;
-      left = context.projection.screenX(high.z) + scale * 0.5 - side * 0.5;
-      top = context.projection.screenY(high.y) + scale * 0.5 - side * 0.5;
+      left = context.projection.screenXAt(section, high.z) + scale * 0.5 - side * 0.5;
+      top = context.projection.screenYAt(section, high.y) + scale * 0.5 - side * 0.5;
       width = side;
       height = side;
     }

@@ -10,11 +10,13 @@ import { CrewRole } from "../crew/CrewMember";
 import { BlueprintValidator } from "../editor/BlueprintValidator";
 import { BlueprintCodec } from "../persistence/BlueprintCodec";
 import { BlueprintLibrary } from "../persistence/BlueprintLibrary";
+import { DepthOrder } from "../render/DepthOrder";
 import { FieldDesign } from "../render/FieldDesign";
 import { FieldFrame, isLoudStatus } from "../render/FieldFrame";
 import { FieldRenderer } from "../render/FieldRenderer";
 import { FrameBuilder } from "../render/FrameBuilder";
 import { PredictAnalysis, PredictOutcome } from "../render/PredictAnalysis";
+import { ViewMode, otherViewMode } from "../render/ViewMode";
 import { OverlayMode, ViewState } from "../render/ViewState";
 import { Projection } from "../render/Projection";
 import { Arena } from "../sim/Arena";
@@ -388,6 +390,21 @@ export class App implements SimTarget, FitTarget {
    */
   public fitView(): void {
     Projection.fit(this.currentDesign(), this.view, this.renderer.width, this.renderer.height);
+  }
+
+  /**
+   * Flat to 2.5D and back (depth view spec 5).
+   *
+   * Deliberately does **not** refit. The depth offset is measured from the active
+   * cross-section, so the section the tester is working in is in the same place before and
+   * after the toggle, and reframing the view under them would throw away the one property
+   * the projection was chosen for. `fit` is one key away when they want it.
+   */
+  private toggleViewMode(): void {
+    const next = otherViewMode(this.view.mode);
+    this.dispatcher.dispatchView(ViewCommand.mode(next));
+    this.telemetry.noteViewMode(next === ViewMode.Depth, App.now());
+    this.panelDirty = true;
   }
 
   private currentDesign(): FieldDesign {
@@ -995,6 +1012,13 @@ export class App implements SimTarget, FitTarget {
     state.slice = this.view.slice;
     state.sliceMin = frame.design.sliceMin;
     state.sliceMax = frame.design.sliceMax;
+    state.viewMode = this.view.mode;
+    state.peeledSections = new DepthOrder(
+      frame.design.sliceMin,
+      frame.design.sliceMax,
+      this.view.slice,
+      this.view.mode
+    ).peeledCount;
     const sliceCounts: number[] = [];
     for (let x = frame.design.sliceMin; x <= frame.design.sliceMax; x++) {
       sliceCounts.push(frame.design.blocksInSlice(x).length);
@@ -1486,6 +1510,10 @@ export class App implements SimTarget, FitTarget {
       this.panelDirty = true;
       return;
     }
+    if (key === "v") {
+      this.toggleViewMode();
+      return;
+    }
     if (key === "z" && this.screen === Screen.Design) {
       if (this.editor.undo(App.now())) {
         this.refreshDesignFrame();
@@ -1533,6 +1561,7 @@ export class App implements SimTarget, FitTarget {
     return (
       key === "[" ||
       key === "]" ||
+      key === "v" ||
       key === "z" ||
       key === "y" ||
       key === " " ||
@@ -1583,6 +1612,10 @@ export class App implements SimTarget, FitTarget {
     if (action === "slice-picker") {
       this.slicePickerOpen = !this.slicePickerOpen;
       this.panelDirty = true;
+      return;
+    }
+    if (action === "view-mode") {
+      this.toggleViewMode();
       return;
     }
     if (action === "fit") {

@@ -38,6 +38,8 @@ export class UtilizationBand {
 export class Palette {
   public static readonly background: string = "#12151b";
   public static readonly pad: string = "#1d2430";
+  /** The floor between the nearest section and the farthest, in the depth view. */
+  public static readonly groundPlane: string = "#171d27";
   public static readonly padLine: string = "#2b3542";
   public static readonly grid: string = "#1a1f28";
   public static readonly sky: string = "#0d1015";
@@ -72,6 +74,44 @@ export class Palette {
 
   public static materialEdge(material: MaterialId): string {
     return material === MaterialId.Wood ? "#a8783f" : "#8b93a1";
+  }
+
+  /**
+   * The cube faces of the depth view (depth view spec 2).
+   *
+   * Shaded off the material's own colour by **luminance only** -- the top face lightened,
+   * the receding side darkened -- because depth view spec 4.4 keeps hue free for the things
+   * that encode on it. A wood cube and a stone cube stay a wood cube and a stone cube in
+   * greyscale, and the utilization ramp drawn over them is untouched.
+   */
+  public static readonly TOP_FACE_LIGHT: number = 0.26;
+  public static readonly SIDE_FACE_SHADE: number = 0.34;
+
+  public static topFaceFill(material: MaterialId): string {
+    return Palette.shade(Palette.materialFill(material), Palette.TOP_FACE_LIGHT);
+  }
+
+  public static sideFaceFill(material: MaterialId): string {
+    return Palette.shade(Palette.materialFill(material), -Palette.SIDE_FACE_SHADE);
+  }
+
+  /** The outline a peeled section is drawn with: the cut wall in front of the working plane. */
+  public static readonly peelEdge: string = "#9fb0c6";
+
+  /** Lightens (positive) or darkens (negative) a `#rrggbb` colour, keeping its hue. */
+  public static shade(hex: string, amount: number): string {
+    const red = Palette.channel(hex, 1, amount);
+    const green = Palette.channel(hex, 3, amount);
+    const blue = Palette.channel(hex, 5, amount);
+    return "rgb(" + red.toString() + "," + green.toString() + "," + blue.toString() + ")";
+  }
+
+  private static channel(hex: string, at: number, amount: number): number {
+    const value = Number.parseInt(hex.substring(at, at + 2), 16);
+    const target = amount >= 0 ? 255 : 0;
+    const scaled = amount >= 0 ? amount : -amount;
+    const mixed = Math.round(value + (target - value) * scaled);
+    return mixed < 0 ? 0 : mixed > 255 ? 255 : mixed;
   }
 
   /** Kind badges. Structural blocks get none: the material colour is the whole story. */

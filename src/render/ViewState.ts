@@ -1,4 +1,5 @@
 import { IVec3 } from "../core/IVec3";
+import { ViewMode } from "./ViewMode";
 
 /**
  * The five overlays, numbered to match the keys that select them (UI spec 4).
@@ -59,7 +60,18 @@ export function overlayLegend(mode: OverlayMode): string {
  */
 export class ViewState {
   public overlay: OverlayMode;
-  /** Which x cross-section is drawn solid. P0 renders one side-on slice at a time. */
+  /**
+   * Which projection the field is drawn with (depth view spec 2).
+   *
+   * `Flat` by default, because UI spec 7.2 opens a session mid-loop and a tester who has
+   * learned nothing yet should not have to learn a projection first.
+   */
+  public mode: ViewMode;
+  /**
+   * Which x cross-section is drawn solid, and -- in the depth view -- where the cutaway
+   * plane sits (depth view spec 3). One control, not two: stepping toward the viewer peels
+   * one more wall off the front of the turret.
+   */
   public slice: number;
   /** Zoom, in screen pixels per voxel. */
   public scale: number;
@@ -76,6 +88,7 @@ export class ViewState {
 
   public constructor(slice: number) {
     this.overlay = OverlayMode.Material;
+    this.mode = ViewMode.Flat;
     this.slice = slice;
     this.scale = 26;
     this.panX = 0;

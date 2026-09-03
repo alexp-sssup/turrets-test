@@ -15,10 +15,11 @@ import { SessionSummary } from "./Telemetry";
  */
 export class AttemptExport {
   /**
-   * Two, since the mobile UI spec 9.1 device fields landed. One artifact, three uses, and
-   * still one file per attempt: the export stays the replay format and the batch input.
+   * Three, since the depth view spec 8 dwell fields joined the mobile UI spec 9.1 device
+   * ones. One artifact, three uses, and still one file per attempt: the export stays the
+   * replay format and the batch input.
    */
-  public static readonly FORMAT_VERSION: number = 2;
+  public static readonly FORMAT_VERSION: number = 3;
 
   public static toJson(record: AttemptRecord, summary: SessionSummary | null): string {
     return JSON.stringify(AttemptExport.toObject(record, summary));
@@ -102,6 +103,8 @@ export class AttemptExport {
           consultedSolverBeforeRun: record.overlayDwell.consultedSolverBeforeRun,
           solverDwellBeforeRunSeconds: Number(record.overlayDwell.solverDwellBeforeRun.toFixed(2)),
           predictOpenedDuringRun: record.predictOpenedDuringRun,
+          depthViewSeconds: Number(record.depthViewSeconds.toFixed(2)),
+          depthViewOpenedBeforeRun: record.depthViewOpenedBeforeRun,
         },
         loop: {
           replayOpened: record.replayOpened,

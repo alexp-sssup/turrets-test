@@ -310,13 +310,21 @@ The peel is the same one control the build already has — the active cross-sect
 with `[` and `]`. Which sections count as "in front" follows from the yaw (§2.2) rather than
 from the sign of x, because a quarter turn moves the camera to the other side of the turret.
 
-**Why peeling the sections in front is exactly enough.** Any cell that occludes a cell of
-the build plane lies on the view ray between it and the camera, and one step along that ray
-changes the section index by exactly one — the ray direction has unit magnitude on the x
-axis at every yaw (§2.2). So every occluder of the build plane is a cell in a section nearer
-the camera than the build plane, and peeling those sections removes **all** of them and
-nothing else. Plane-locked placement (§5.3) is therefore honest: with the peel engaged, what
-a tester clicks on is what a tester gets.
+**Why peeling the sections in front is exactly enough.** Take any cell that covers part of a
+build-plane cell on screen. It is one of two things. Either it stands in the build plane
+itself — cubes in one plane do overlap, because a section is a plane of *cubes* and not a
+sheet of tiles, and the three offsets that can do it are up, one along the lane, and the
+diagonal of those two — or it stands in another section, and then it is nearer the camera,
+and one step toward the camera changes the section index by exactly one, because the ray
+direction has unit magnitude on the x axis at every yaw (§2.2). So every occluder that is not
+part of the build plane sits in a section on the camera side of it, and peeling those
+sections removes **all** of them and nothing else.
+
+Plane-locked placement (§5.3) is therefore honest: with the peel engaged, nothing outside the
+tester's own working plane stands in front of it, and what they click on is what they get. The
+overlap *within* the plane is not a depth ambiguity — those cells are in the plane the click
+resolves in, at coordinates the inverse of §5.1 returns exactly — and it is not removable
+either, short of drawing a section as tiles and lying about what a voxel is.
 
 | Section | Treatment |
 |---|---|
@@ -400,11 +408,19 @@ by construction rather than by hope:
   costs roughly its silhouette: a few hundred cells, at most three quads each.
 - **Viewport culling.** A cell whose hexagon lies outside the canvas is skipped before any
   path is built.
-- **The static pass is cached.** The ground, the pad and the peeled and solid structure are
-  composited to an offscreen canvas, keyed by `(blueprint revision, alive stamp, damage
-  stamp, fire stamp, s, yaw, peel, origin)`. A run frame is then one blit plus the actors,
-  the projectiles and the overlay — which is what makes 60 fps on a phone a claim rather
-  than a wish, since none of those keys change while a wave plays out except by damage.
+- **The static pass is cached**, for the frames where caching is sound. The ground, the pad,
+  the build plane and the structure are composited to an offscreen canvas, keyed by
+  everything that can change one of its pixels: the whole view geometry, and every block's
+  alive, damage and fire state. A frame is then one blit plus the marks.
+
+  The limit is §4, and it is not negotiable: **the actors are items inside the depth sort,
+  not a layer above it.** Caching the structure and drawing the actors over it would put
+  every runner in front of every wall and give away the read this projection exists for. So
+  the cache serves the frames with nothing moving in them — the editor, allocation, a wave
+  not yet started, a paused replay — which is where a tester spends most of their attention
+  and where the solver is already busy, and a live wave pays the full sort every frame.
+  §3.3's occlusion rule and the culling above are what make that affordable; the per-yaw
+  render p95 is what says whether it worked.
 - **No per-cell allocation.** The draw list is pre-sized to the cell count and reused; sorts
   are in place over an integer key array.
 - **Integer vertices** (§2.3), so no sub-pixel path snapping and no anti-aliasing cost on
@@ -508,8 +524,10 @@ citing the section. Everything below is pure computation and runs headlessly und
   plane, at every rung; §5.2's DDA returning the nearest live block for a ray crossing three
   candidates, in all four yaws; the visit-count bound.
 - `test/render/PeelPlane.test.ts` — §6's treatment table; the peel side flipping between
-  yaw 1 and yaw 2; and the property the section is argued from, asserted directly: **for
-  every cell of the build plane, no unpeeled cell projects over it.**
+  yaw 1 and yaw 2; and the property the section is argued from, asserted directly two ways:
+  every cell on the view ray out of a build-plane cell is peeled, and **no unpeeled cell from
+  another section covers any part of the build plane**, sampled over the silhouette — with the
+  in-plane overlap of §6 the only thing that survives the filter.
 - `test/render/DepthKey.test.ts` — §4's key as the view-ray order for a hand-checked set;
   ties never overlapping; the tie-break total and stable.
 - `test/render/VoxelFaces.test.ts` — §3's face-visibility rules per yaw; §3.1 stroking a
@@ -534,7 +552,8 @@ nobody can review.
 5. Actors, shadows and projectiles into the sorted list (§7). **The loop is validated from
    here** — everything before this is a picture of a turret rather than a run of one.
 6. The four yaws and the compass; ground tiles and the ground-borne range marker.
-7. `StructureCache`, the culling of §8, the degradation order, the dev readout's per-yaw p95.
+7. `StructureCache` for the frames that carry nothing moving, the culling of §8, the
+   degradation order, the dev readout's per-yaw p95.
 8. Flat view demoted to the dev readout (§9); the `v` toggle removed; §11's metrics landed.
 
 ---

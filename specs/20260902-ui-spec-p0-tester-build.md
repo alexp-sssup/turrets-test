@@ -22,7 +22,7 @@ A second requirement comes from putting this in front of testers rather than the
 
 **The tester build is a side-on 2D voxel cross-section, not 3D.** This is a deliberate deviation from the voxel framing in v0.2, taken for the prototype only.
 
-> **Amended by [20260903-depth-view.md](20260903-depth-view.md).** The cross-section is now the *default* view rather than the only one: an optional fixed-camera 2.5D depth view draws the same scene with the x axis given a place on screen. Everything below still holds — it is one projection over the same layer registry, there is still no camera to learn, and `sim/` and `structure/` are still untouched.
+> **Amended by [20260903-isometric-renderer.md](20260903-isometric-renderer.md), which supersedes the depth-view spec that first amended this section.** The headline decision now reads: the tester build renders a **fixed isometric 2.5D view** of the voxel world, and the side-on cross-section is retained only as a developer diagnostic. The argument below is not withdrawn — it is answered: it costed the renderer correctly and never asked whether what a tester learns to read *transfers* to the game, which is the question that decides a projection. The seam argument still holds exactly as written, and it is why the replacement is affordable: `render/` and editor placement change, `sim/` and `structure/` do not. What that document owes this one is interiors, which were free here and are not free there; it pays the debt with a peel plane.
 
 Everything P0 tests exists in two dimensions: load paths under gravity, joint utilization, tension vs. compression, fire flowing down through contiguous wood, firing arcs, crew paths, and haul round trips.
 
@@ -54,7 +54,8 @@ Four screens and one persistent shell. The loop is Design → Allocate → Run �
 | Map / node selection | **[out]** | P2 |
 | Opponent view, spectator | **[out]** | P1 |
 | Touch / mobile layout | **[in]** | One build, responsive; see [20260903-mobile-ui.md](20260903-mobile-ui.md) |
-| 2.5D depth view | **[in]** | Optional, additive, flat stays default; see [20260903-depth-view.md](20260903-depth-view.md) |
+| Isometric 2.5D field | **[in]** | The tester-facing projection; see [20260903-isometric-renderer.md](20260903-isometric-renderer.md) |
+| Side-on cross-section | **[in]** | Demoted to a developer diagnostic by that document |
 | Art, audio, VFX polish | **[out]** | Legibility over fidelity everywhere |
 
 ### 3.1 Design

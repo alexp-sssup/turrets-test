@@ -1,5 +1,13 @@
 # 2.5D depth view — seeing inside a multilayer turret
 
+> **Superseded by [20260903-isometric-renderer.md](20260903-isometric-renderer.md). Do not
+> implement against this document.** It is kept because it is where the peel rule of §3 and
+> the rejected alternatives of §3.1 were first argued, and the isometric spec inherits both.
+> What it got wrong is the projection: a cabinet oblique with a 0.42-cell offset gives the x
+> axis a place on screen without making the scene a scene, so five sections still read as
+> five stacked cards and §1.3's anti-blob question stays unanswerable. Its optional-additive
+> framing is withdrawn with it — there is one tester-facing projection, and it is isometric.
+
 Layers on top of *UI spec — P0 tester build*, and amends its §2. Section references written
 `UI §n` point at that document; `§n` alone points at this one.
 

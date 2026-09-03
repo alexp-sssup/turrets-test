@@ -11,9 +11,12 @@ What is here so far:
   browser tester build on top of it.
 - [`20260903-mobile-ui.md`](20260903-mobile-ui.md) — touch and small screens, extending
   that one.
-- [`20260903-depth-view.md`](20260903-depth-view.md) — the optional 2.5D depth view over
-  the same scene, and how a multilayer turret is read from the inside. Amends §2 of the
-  UI spec.
+- [`20260903-isometric-renderer.md`](20260903-isometric-renderer.md) — the isometric 2.5D
+  renderer: the projection, depth sorting, picking, the peel plane, and the scene the turret
+  stands in. Amends §2 and §3 of the UI spec and supersedes the depth-view spec below.
+- [`20260903-depth-view.md`](20260903-depth-view.md) — **superseded** by the isometric
+  renderer spec. Kept for the peel rule it first argued and the alternatives it ruled out;
+  not to be implemented against.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

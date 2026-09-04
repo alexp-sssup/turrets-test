@@ -11,6 +11,7 @@ import { BlueprintBuilder } from "../../src/blueprint/BlueprintBuilder";
 import { ConstantBudgetProvider } from "../../src/blueprint/BudgetProvider";
 import { SampleBlueprints } from "../../src/blueprint/SampleBlueprints";
 import { BlueprintValidator } from "../../src/editor/BlueprintValidator";
+import { Path } from "../../src/path/Path";
 import { StationReadout } from "../../src/editor/StationReadout";
 import { ViolationKind } from "../../src/editor/Violation";
 import { StructuralStatus } from "../../src/structure/StructuralReport";
@@ -50,18 +51,22 @@ describe("BlueprintValidator: the standard turret", () => {
     assert.equal(station.arcCentreClear, true);
     assert.ok(station.arcClearFraction >= 0.5, station.arcClearFraction.toString());
 
-    // Somewhere to stand, a way out, and a depot to walk to.
+    // Gun-ports spec 2.4: the gunner is in the slit, so the crew cell is the station itself
+    // and not the parapet cell above it that direction order used to hand them.
     assert.notEqual(station.crewCell, null);
+    assert.ok((station.crewCell as IVec3).equals(station.position));
     assert.equal(station.hasEntryRoute, true);
     assert.equal(station.hasDepotRoute, true);
     assert.ok(station.nearestDepot >= 0);
 
     // The three numbers the editor has to show: route, round-trip time, rounds per trip.
-    assert.ok(station.depotPath !== null && station.depotPath.stepCount > 0);
-    assert.ok(
-      station.roundTripSeconds > 0 && Number.isFinite(station.roundTripSeconds),
-      station.roundTripSeconds.toString()
-    );
+    // This station's depot is the cell directly behind its port, so the route is real and
+    // zero steps long -- a magazine behind the gun costs no walk, and pays cook-off instead
+    // (gun-ports spec 3).
+    assert.notEqual(station.depotPath, null);
+    assert.equal((station.depotPath as Path).stepCount, 0);
+    assert.equal(station.roundTripSeconds, 2);
+    assert.equal(report.stationReadouts[1].roundTripSeconds, 4);
     assert.equal(station.roundsPerTrip(AmmoLoadId.SolidShot), 4);
     assert.equal(station.roundsPerTrip(AmmoLoadId.Firepot), 12);
   });

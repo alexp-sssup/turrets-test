@@ -14,16 +14,19 @@ export enum ViolationKind {
   Tipping = 5,
   /** The gun cannot see out. */
   StationArcBlocked = 6,
-  /** Nowhere for the gunner to stand. */
-  StationNoCrewSpace = 7,
   /**
    * Crew-access spec 2.3: no traversable route from the station to a way in. There is no
    * violation for having no hatch (2.4) -- a single-storey turret needs none, and a station
    * stranded upstairs is reported by this rule without one.
+   *
+   * Gun-ports spec 2.4 deleted its neighbour, `StationNoCrewSpace`, for the same reason:
+   * the gunner stands in the slit and a live station is always standable, so "nowhere for
+   * the gunner to stand" could no longer happen. Being unable to *reach* the post still can,
+   * and that is this rule.
    */
-  StationNoEntryPath = 8,
+  StationNoEntryPath = 7,
   /** No traversable route from the station to any depot: it will fire its rack dry. */
-  StationNoDepotPath = 9,
+  StationNoDepotPath = 8,
 }
 
 export function violationKindName(kind: ViolationKind): string {
@@ -35,7 +38,6 @@ export function violationKindName(kind: ViolationKind): string {
     "structurally unsound",
     "tips over",
     "station firing arc blocked",
-    "station has nowhere for crew to stand",
     "station has no route in",
     "station has no route to a depot",
   ];

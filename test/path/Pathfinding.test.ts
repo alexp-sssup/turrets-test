@@ -68,6 +68,54 @@ describe("WalkGraph", () => {
     assert.equal((climb as Path).stepCount, 1);
   });
 
+  it("treats a station as an opening crew stand in, not as a wall (gun-ports spec 2.1, 2.2)", () => {
+    const builder = floor(3)
+      .place(new IVec3(1, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ)
+      .place(new IVec3(0, 1, 0), MaterialId.Wood, BlockKind.Structural, Direction.PosZ)
+      .place(new IVec3(2, 1, 0), MaterialId.Wood, BlockKind.Structural, Direction.PosZ);
+    const structure = structureOf(builder, "ported");
+    const graph = WalkGraph.build(structure, PAD);
+    // 2.1: the slit is person-sized, so the gunner is in it. The wall beside it is not.
+    assert.equal(graph.isPassable(new IVec3(1, 1, 0)), true);
+    assert.equal(graph.isPassable(new IVec3(0, 1, 0)), false);
+    assert.equal(graph.isStation(new IVec3(1, 1, 0)), true);
+    assert.equal(graph.isStandable(new IVec3(1, 1, 0)), true);
+  });
+
+  it("gives a station its own footing, as the reaching gun needs (gun-ports spec 2.2)", () => {
+    // A station on the end of a deck, with open air underneath it: the emplacement is part
+    // of the block, so the gunner stands there anyway.
+    const builder = deck(2, 1).place(new IVec3(2, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
+    const structure = structureOf(builder, "cantilevered gun");
+    const graph = WalkGraph.build(structure, PAD);
+    assert.equal(graph.hasFloor(new IVec3(2, 1, 0)), false, "nothing under it");
+    assert.equal(graph.isStandable(new IVec3(2, 1, 0)), true, "and standable regardless");
+  });
+
+  it("does not make a stack of gun ports a ladder (gun-ports spec 2.3)", () => {
+    // A bare two-port column on the pad. Nothing flanks it, so stepping up and round is not
+    // available and the only way from the lower port to the upper one would be straight up.
+    const ports = new BlueprintBuilder()
+      .place(new IVec3(0, 0, 0), MaterialId.Wood, BlockKind.Structural, Direction.PosZ)
+      .place(new IVec3(0, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ)
+      .place(new IVec3(0, 2, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
+    const graph = WalkGraph.build(structureOf(ports, "port stack"), PAD);
+    assert.equal(graph.isStandable(new IVec3(0, 1, 0)), true, "each port is standable");
+    assert.equal(graph.isStandable(new IVec3(0, 2, 0)), true);
+    // Both standable, stacked, and still no way from one to the other: vertical movement is
+    // a hatch's job and nobody climbs a wall by its windows.
+    assert.equal(new AStar(graph).findPath(new IVec3(0, 1, 0), new IVec3(0, 2, 0)), null);
+
+    // The same column with hatches is a ladder, which is the contrast that makes the rule a
+    // rule rather than an oversight.
+    const hatches = new BlueprintBuilder()
+      .place(new IVec3(0, 0, 0), MaterialId.Wood, BlockKind.Structural, Direction.PosZ)
+      .place(new IVec3(0, 1, 0), MaterialId.Wood, BlockKind.Hatch, Direction.PosY)
+      .place(new IVec3(0, 2, 0), MaterialId.Wood, BlockKind.Hatch, Direction.PosY);
+    const ladder = WalkGraph.build(structureOf(hatches, "hatch stack"), PAD);
+    assert.notEqual(new AStar(ladder).findPath(new IVec3(0, 1, 0), new IVec3(0, 2, 0)), null);
+  });
+
   it("reports the standable cells around a block", () => {
     const structure = structureOf(floor(3), "access");
     const graph = WalkGraph.build(structure, PAD);

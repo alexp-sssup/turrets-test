@@ -427,10 +427,10 @@ export class LogisticsSystem {
     if (!structure.isAlive(supply.block)) {
       return -1;
     }
-    const crewCells = graph.accessCells(structure.positionOf(supply.block));
-    if (crewCells.length === 0) {
-      return -1;
-    }
+    // Gun-ports spec 2.4: a resupply trip starts where the gunner is, and the gunner is in
+    // the slit. The runner walks to the post rather than to a cell beside it, which is the
+    // same journey the editor's readout quotes.
+    const crewCell = structure.positionOf(supply.block);
     const depots = this.sortedKeys(this.depots);
     let best: Path | null = null;
     let bestDepot = -1;
@@ -447,7 +447,7 @@ export class LogisticsSystem {
       if (targets.length === 0) {
         continue;
       }
-      const candidate = pathfinder.findPathToAny(crewCells[0], targets);
+      const candidate = pathfinder.findPathToAny(crewCell, targets);
       if (candidate === null) {
         continue;
       }

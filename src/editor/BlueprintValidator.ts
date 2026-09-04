@@ -205,28 +205,11 @@ export class BlueprintValidator {
         );
       }
 
-      const crewCells = graph.accessCells(position);
-      const crewCell = crewCells.length > 0 ? crewCells[0] : null;
-      if (crewCell === null) {
-        violations.push(
-          new Violation(ViolationKind.StationNoCrewSpace, station, "no standable cell adjacent")
-        );
-        readouts.push(
-          new StationReadout(
-            station,
-            position,
-            arcFraction,
-            centreClear,
-            null,
-            null,
-            null,
-            -1,
-            Number.POSITIVE_INFINITY,
-            new Int32Array(AMMO_LOAD_COUNT)
-          )
-        );
-        continue;
-      }
+      // Gun-ports spec 2.4: the gunner stands in the slit, so the station's own cell is the
+      // crew cell. It is always standable while the station is alive (2.2), which is why
+      // there is no "nowhere for the gunner to stand" violation any more: the question that
+      // can still fail is whether they can *reach* it, and that is the entry path below.
+      const crewCell = position;
 
       const entryPath =
         entryCells.length > 0 ? pathfinder.findPathToAny(crewCell, entryCells) : null;

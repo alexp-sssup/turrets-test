@@ -11,14 +11,16 @@ import { BlockStructure } from "../structure/BlockStructure";
  * The rules, kept deliberately few so that a violation the editor reports is one a player
  * can see:
  *
- * * A cell is **passable** when it holds no live block, or holds a hatch. Hatches are the
- *   only block kind crew move through, which is what gives them a job (spec 4.2).
+ * * A cell is **passable** when it holds no live block, or holds a hatch or a station.
+ *   Those two kinds are the openings crew move through: a hatch is a doorway (spec 4.2) and
+ *   a station is a firing slit its gunner stands in (gun-ports spec 2.1).
  * * A cell is **standable** when it is passable and either the cell below holds a live
- *   block or the cell is on the ground plane (standable-ground spec 2). So crew walk on top
- *   of the structure, along its interior floors, and across the ground around it -- and a
- *   corridor that loses its floor stops being a corridor.
+ *   block, or the cell is on the ground plane (standable-ground spec 2), or it is a hatch
+ *   or a station -- both of which carry the footing they are stood on (gun-ports spec 2.2).
+ *   So crew walk on top of the structure, along its interior floors, and across the ground
+ *   around it -- and a corridor that loses its floor stops being a corridor.
  * * Horizontal moves may step up or down by one. Vertical moves need a hatch at one end,
- *   so a hatch column is a ladder.
+ *   so a hatch column is a ladder and a stack of gun ports is not (gun-ports spec 2.3).
  *
  * The graph is derived from the structure and rebuilt when it changes -- the same contract
  * the joint graph has, for the same reason. Spec 4.3 calls path invalidation as blocks die
@@ -86,12 +88,21 @@ export class WalkGraph {
     return this.boundsValue.positionOf(index);
   }
 
+  /**
+   * Gun-ports spec 2.1: a station is an opening crew occupy, so it is passable like a hatch.
+   *
+   * The two openings are not the same opening. A hatch is a hole and a shot goes through it
+   * (hatches spec 5); a station is a wall with a slit in it, which is why prototype §4.2 has
+   * a round kill the gunner *through the port* without destroying the block. Passability is
+   * the one property they share, and it is shared because both are person-sized.
+   */
   public isPassable(cell: IVec3): boolean {
     const block = this.structure.indexAt(cell);
     if (block < 0) {
       return true;
     }
-    return this.structure.kindOf(block) === BlockKind.Hatch;
+    const kind = this.structure.kindOf(block);
+    return kind === BlockKind.Hatch || kind === BlockKind.Station;
   }
 
   /** True when the cell has a floor under it. */
@@ -106,12 +117,25 @@ export class WalkGraph {
     if (!this.isPassable(cell)) {
       return false;
     }
-    return this.hasFloor(cell) || this.isHatch(cell) || this.isGround(cell);
+    return this.hasFloor(cell) || this.isHatch(cell) || this.isStation(cell) || this.isGround(cell);
   }
 
   public isHatch(cell: IVec3): boolean {
     const block = this.structure.indexAt(cell);
     return block >= 0 && this.structure.kindOf(block) === BlockKind.Hatch;
+  }
+
+  /**
+   * Gun-ports spec 2.2: a station needs nothing under it to be stood in.
+   *
+   * The emplacement is part of the block -- a gun port is a floor, a wall and a slit -- so
+   * the gunner's footing arrives with it, exactly as a hatch's rungs do. Without this the
+   * `reaching gun` example could not be manned at all: its station is the last cell of a
+   * cantilever with open air underneath.
+   */
+  public isStation(cell: IVec3): boolean {
+    const block = this.structure.indexAt(cell);
+    return block >= 0 && this.structure.kindOf(block) === BlockKind.Station;
   }
 
   /**

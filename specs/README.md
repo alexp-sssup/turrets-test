@@ -41,6 +41,9 @@ What is here so far:
 - [`20260904-gun-ports.md`](20260904-gun-ports.md) — a station is a firing slit and its
   gunner stands in it. Adds a second passable kind beside the hatch, deletes the
   `StationNoCrewSpace` violation, and corrects a round-trip pair quoted in the hatches spec.
+- [`20260904-palette-material.md`](20260904-palette-material.md) — the palette says which
+  material it authors. Writes down the P0 restriction that a station, a depot and a hatch
+  are wood, and amends the palette sentence of §3.1 of the UI spec to name it.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

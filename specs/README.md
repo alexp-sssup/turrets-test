@@ -21,8 +21,12 @@ What is here so far:
   Core block from P0 and replaces the win-condition dial in §5 of the P0 spec with a win and
   two named losses, wrecked and unmanned.
 - [`20260904-touch-gestures.md`](20260904-touch-gestures.md) — a one-finger drag pans on
-  every screen. Amends the gesture table and caption rows of the mobile UI spec; the mouse
-  keeps drag-to-place.
+  every screen. Amends the gesture table and caption rows of the mobile UI spec. Its §6 said
+  the mouse was unchanged; the document below supersedes that section and nothing else.
+- [`20260904-mouse-gestures.md`](20260904-mouse-gestures.md) — the mouse follows: placement
+  is single-cell on every pointer, a drag pans, and §3.1 of the UI spec loses its
+  click-drag rectangles. Read with the touch document above; together they are the whole
+  gesture set.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

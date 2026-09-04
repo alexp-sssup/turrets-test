@@ -27,9 +27,11 @@ What is here so far:
   is single-cell on every pointer, a drag pans, and §3.1 of the UI spec loses its
   click-drag rectangles. Read with the touch document above; together they are the whole
   gesture set.
-- [`20260904-hatches.md`](20260904-hatches.md) — what a hatch is: a door, a ladder, a hole
-  that carries almost no load and stops no shot. Adds the §4 section the P0 spec never had
-  and one dial.
+- [`20260904-hatches.md`](20260904-hatches.md) — what a hatch is: a ladder, and a hole that
+  carries almost no load and stops no shot. Adds the §4 section the P0 spec never had and
+  one dial. Its §7 is superseded by the document below.
+- [`20260904-crew-access.md`](20260904-crew-access.md) — crew walk in through an opening in
+  the ground floor, and hatches are only for going up. Deletes the "no hatch" violation.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

@@ -104,6 +104,10 @@ export class App implements SimTarget, FitTarget {
   private lastPanelMs: number;
   private lastShellMs: number;
   private lastFrameMs: number;
+  /**
+   * The corners of a mouse rectangle in progress, and only a mouse's: touch-gestures spec
+   * 2.1 makes the rectangle a mouse verb, so nothing on the recognizer path writes these.
+   */
   private dragFrom: IVec3 | null;
   private dragTo: IVec3 | null;
   private panning: boolean;
@@ -1339,8 +1343,10 @@ export class App implements SimTarget, FitTarget {
   private applyGesture(intent: GestureIntent): void {
     const kind = intent.kind;
     if (kind === GestureKind.Cancel) {
-      // Discarded, never committed: a silent, uncommanded edit is worse than a lost
-      // gesture (6.2).
+      // 6.2's cancel rules, with less left to cancel: touch-gestures spec 2.4. A touch drag
+      // no longer places, so what a pinch or a `pointercancel` discards here is a mouse
+      // rectangle caught mid-drag by a cancelled pointer. Kept, because a silent
+      // uncommanded edit is still worse than a lost gesture.
       this.dragFrom = null;
       this.dragTo = null;
       return;
@@ -1408,26 +1414,21 @@ export class App implements SimTarget, FitTarget {
     this.panelDirty = true;
   }
 
-  /** A one-finger drag: a rectangle in Design, a pan everywhere else (6.2). */
+  /**
+   * A one-finger drag pans, on every screen (touch-gestures spec 2).
+   *
+   * This routine only ever sees a finger or a stylus: a mouse goes to `onCanvasDown` and
+   * never reaches the recognizer (mobile UI spec 3.2), which is why the rectangle can stay
+   * a mouse verb while this one is a pan. Nothing here writes to the blueprint, so on touch
+   * the tap is the only gesture that edits, one cell at a time (2.1).
+   */
   private onDrag(intent: GestureIntent): void {
-    const editing = this.screen === Screen.Design;
     if (intent.kind === GestureKind.DragStart) {
-      if (editing) {
-        this.dragFrom = this.cellAtClient(intent.x, intent.y);
-        this.dragTo = this.dragFrom;
-        return;
-      }
       this.panFromX = intent.x;
       this.panFromY = intent.y;
       return;
     }
     if (intent.kind === GestureKind.DragMove) {
-      if (editing) {
-        if (this.dragFrom !== null) {
-          this.dragTo = this.cellAtClient(intent.x, intent.y);
-        }
-        return;
-      }
       this.dispatcher.dispatchView(
         ViewCommand.pan(intent.x - this.panFromX, intent.y - this.panFromY)
       );
@@ -1439,18 +1440,6 @@ export class App implements SimTarget, FitTarget {
       return;
     }
     this.gestureDrags++;
-    const from = this.dragFrom;
-    const to = this.dragTo;
-    this.dragFrom = null;
-    this.dragTo = null;
-    if (!editing || from === null || to === null) {
-      return;
-    }
-    if (this.editor.applyRect(from, to, App.now())) {
-      this.refreshDesignFrame();
-    }
-    this.dispatcher.dispatchView(ViewCommand.select(to));
-    this.panelDirty = true;
   }
 
   /**

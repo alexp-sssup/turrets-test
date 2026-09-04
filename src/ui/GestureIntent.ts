@@ -16,7 +16,7 @@ export enum GestureKind {
   LongPress = 2,
   /** Long-press then drag: the inspected cell follows the finger (6.3). */
   Sweep = 3,
-  /** One-finger drag: a rectangle in Design, a pan in Run/Replay. */
+  /** One-finger drag: a pan, on every screen (touch-gestures spec 2). */
   DragStart = 4,
   DragMove = 5,
   DragEnd = 6,
@@ -27,10 +27,11 @@ export enum GestureKind {
   /**
    * Discard whatever was in progress without committing it.
    *
-   * Emitted when a second pointer arrives mid-placement and when the browser takes the
-   * gesture over. Both cases are correctness rather than feel (6.2): a tester zooming in to
-   * look at a joint must not find a rectangle of stone where they put their fingers, and a
-   * silent uncommanded edit is worse than a lost gesture.
+   * Emitted when a second pointer arrives mid-gesture and when the browser takes the
+   * gesture over. Both cases are correctness rather than feel (6.2), and touch-gestures
+   * spec 2.4 keeps them: a touch drag no longer places, so the pinch case now reads as
+   * "stop panning and start zooming", and a silent uncommanded edit is still worse than a
+   * lost gesture.
    */
   Cancel = 9,
 }

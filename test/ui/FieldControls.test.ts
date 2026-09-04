@@ -51,6 +51,30 @@ describe("FieldControls", () => {
   });
 
   /**
+   * Touch-gestures spec 2 and 5. The caption is what a tester is told the canvas does, so
+   * it is where the rule that a one-finger drag pans is pinned: the coarse column must not
+   * promise a rectangle, and it must say that a plain drag pans.
+   */
+  it("promises a pan and no rectangle on a coarse pointer (touch-gestures spec 5)", () => {
+    assert.equal(FieldControls.hintFor("place", true), "tap to place");
+    assert.equal(FieldControls.hintFor("pan", true), "drag to pan, or two fingers");
+
+    const coarse = FieldControls.caption(true);
+    assert.equal(coarse.indexOf("rectangle"), -1, "a finger cannot place one (2.1)");
+    assert.ok(coarse.indexOf("tap to place") >= 0);
+    assert.ok(coarse.indexOf("drag to pan") >= 0);
+  });
+
+  /**
+   * Touch-gestures spec 6: the rectangle stays a mouse verb, so the fine column keeps both
+   * the phrase and the pan binding it was already generated from.
+   */
+  it("leaves the fine pointer's caption alone (touch-gestures spec 6)", () => {
+    assert.equal(FieldControls.hintFor("place", false), "drag to place");
+    assert.equal(FieldControls.hintFor("pan", false), "shift-drag or right-drag to pan");
+  });
+
+  /**
    * 3.2: a coarse pointer does not remove the keyboard shortcuts. The table still carries
    * every binding, and the control bar's buttons take their chips from it.
    */

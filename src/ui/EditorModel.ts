@@ -3,7 +3,7 @@ import { Direction } from "../core/Direction";
 import { IVec3 } from "../core/IVec3";
 import { MaterialId } from "../materials/MaterialId";
 import { MaterialTable } from "../materials/MaterialTable";
-import { BlockKind } from "../blueprint/BlockKind";
+import { BlockKind, blockKindName } from "../blueprint/BlockKind";
 import { Blueprint } from "../blueprint/Blueprint";
 import { BlueprintBuilder } from "../blueprint/BlueprintBuilder";
 import { BudgetProvider } from "../blueprint/BudgetProvider";
@@ -13,27 +13,44 @@ import { BlockStructure } from "../structure/BlockStructure";
 import { StructuralReport } from "../structure/StructuralReport";
 import { SupportSurface } from "../structure/SupportSurface";
 
-/** One palette entry: what a click places, and what it costs. */
+/**
+ * One palette entry: what a click places, and what it costs.
+ *
+ * P0 authors wood stations, wood depots and wood hatches (palette-material spec 2.1). That
+ * is a restriction of this rail and of nothing below it -- `BlueprintBlock` carries kind and
+ * material independently, and a design that arrives with a stone station stays a stone
+ * station -- so the entry holds both and the label is read off them.
+ */
 export class PaletteEntry {
   public readonly key: string;
-  public readonly label: string;
   public readonly material: MaterialId;
   public readonly kind: BlockKind;
   /** True for the eraser, which places nothing. */
   public readonly erases: boolean;
 
-  public constructor(
-    key: string,
-    label: string,
-    material: MaterialId,
-    kind: BlockKind,
-    erases: boolean
-  ) {
+  public constructor(key: string, material: MaterialId, kind: BlockKind, erases: boolean) {
     this.key = key;
-    this.label = label;
     this.material = material;
     this.kind = kind;
     this.erases = erases;
+  }
+
+  /**
+   * What the chip reads: `wood`, `stone`, `wood station`, `erase` (palette-material spec 2.2).
+   *
+   * Derived rather than stored beside the two facts it names. A written-out label can
+   * contradict the entry it sits on, and this document exists because one did: the station
+   * chip said "station" while the entry said wood, and nothing on screen mentioned wood.
+   */
+  public labelWith(materials: MaterialTable): string {
+    if (this.erases) {
+      return "erase";
+    }
+    const material = materials.get(this.material).name;
+    if (this.kind === BlockKind.Structural) {
+      return material;
+    }
+    return material + " " + blockKindName(this.kind);
   }
 }
 
@@ -102,12 +119,13 @@ export class EditorModel {
 
   public static palette(): PaletteEntry[] {
     return [
-      new PaletteEntry("wood", "wood", MaterialId.Wood, BlockKind.Structural, false),
-      new PaletteEntry("stone", "stone", MaterialId.Stone, BlockKind.Structural, false),
-      new PaletteEntry("station", "station", MaterialId.Wood, BlockKind.Station, false),
-      new PaletteEntry("depot", "depot", MaterialId.Wood, BlockKind.Depot, false),
-      new PaletteEntry("hatch", "hatch", MaterialId.Wood, BlockKind.Hatch, false),
-      new PaletteEntry("erase", "erase", MaterialId.Wood, BlockKind.Structural, true),
+      new PaletteEntry("wood", MaterialId.Wood, BlockKind.Structural, false),
+      new PaletteEntry("stone", MaterialId.Stone, BlockKind.Structural, false),
+      // Palette-material spec 2.1: one material per kind entry in P0, and it is wood.
+      new PaletteEntry("station", MaterialId.Wood, BlockKind.Station, false),
+      new PaletteEntry("depot", MaterialId.Wood, BlockKind.Depot, false),
+      new PaletteEntry("hatch", MaterialId.Wood, BlockKind.Hatch, false),
+      new PaletteEntry("erase", MaterialId.Wood, BlockKind.Structural, true),
     ];
   }
 

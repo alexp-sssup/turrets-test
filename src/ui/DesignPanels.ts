@@ -60,11 +60,17 @@ export class DesignPanels {
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const cost = entry.erases ? 0 : materials.get(entry.material).costPerVoxel;
-      const swatch = entry.erases
-        ? "transparent"
-        : entry.kind === BlockKind.Structural
-          ? Palette.materialFill(entry.material)
-          : Palette.kindColour(entry.kind);
+      // Palette-material spec 2.2: the material's fill with the kind's badge over it, which
+      // is the pair of marks `VoxelPainter` puts on the placed voxel. A tester who has seen
+      // the chip can find the block in the design, and the other way round.
+      const swatch = entry.erases ? "transparent" : Palette.materialFill(entry.material);
+      const badge =
+        entry.erases || entry.kind === BlockKind.Structural
+          ? ""
+          : ";box-shadow:inset 0 0 0 2px " +
+            Palette.kindColour(entry.kind) +
+            ";color:" +
+            Palette.kindColour(entry.kind);
       html +=
         '<button class="palette-entry' +
         (entry.key === editor.palette.key ? " active" : "") +
@@ -72,8 +78,11 @@ export class DesignPanels {
         entry.key +
         '"><span class="swatch" style="background:' +
         swatch +
-        '"></span><span class="palette-label">' +
-        Dom.escape(entry.label) +
+        badge +
+        '">' +
+        (entry.erases ? "" : Dom.escape(Palette.kindGlyph(entry.kind))) +
+        '</span><span class="palette-label">' +
+        Dom.escape(entry.labelWith(materials)) +
         "</span>" +
         (entry.erases
           ? '<span class="palette-cost">—</span>'

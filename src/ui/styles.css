@@ -160,6 +160,20 @@ kbd {
 }
 
 /*
+ * Palette-material spec 2.2: a palette chip carries the same two marks the placed voxel
+ * does -- the material's fill, and the kind's badge over it -- so a chip and a block in the
+ * design read as the same thing. Scoped to the palette: the stress key's swatches are a
+ * different encoding and keep it.
+ */
+.palette-entry .swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  line-height: 1;
+}
+
+/*
  * The hatch patterns from the stress layer, repeated here so the key is the same encoding
  * as the field and not an approximation of it.
  */

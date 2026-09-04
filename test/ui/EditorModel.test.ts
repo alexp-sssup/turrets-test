@@ -4,6 +4,8 @@ import { Dials } from "../../src/config/Dials";
 import { IVec3 } from "../../src/core/IVec3";
 import { BlockKind } from "../../src/blueprint/BlockKind";
 import { ConstantBudgetProvider } from "../../src/blueprint/BudgetProvider";
+import { BlueprintBuilder } from "../../src/blueprint/BlueprintBuilder";
+import { Direction } from "../../src/core/Direction";
 import { SampleBlueprints } from "../../src/blueprint/SampleBlueprints";
 import { BlueprintValidator } from "../../src/editor/BlueprintValidator";
 import { MaterialId } from "../../src/materials/MaterialId";
@@ -45,6 +47,63 @@ describe("EditorModel", () => {
     assert.equal(model.remainingBudget, dials.materialBudget - model.cost);
     // Cost is known immediately; the structural rows are the ones that wait.
     assert.equal(model.awaitingSolve, true);
+  });
+
+  // Palette-material spec 2.2: the chip reads its material off the entry rather than from a
+  // label written beside it, so a chip cannot say "station" while authoring wood.
+  it("derives every palette label from the entry's own material and kind", () => {
+    const entries = EditorModel.palette();
+    const labels: string[] = [];
+    for (let i = 0; i < entries.length; i++) {
+      labels.push(entries[i].labelWith(materials));
+    }
+    assert.deepEqual(labels, [
+      "wood",
+      "stone",
+      "wood station",
+      "wood depot",
+      "wood hatch",
+      "erase",
+    ]);
+  });
+
+  // Palette-material spec 2.1, asserted through a placement rather than by reading the table
+  // back: what the rail authors is what ends up in the blueprint.
+  it("authors a wood block for every kind entry", () => {
+    const kinds: readonly (readonly [string, BlockKind])[] = [
+      ["station", BlockKind.Station],
+      ["depot", BlockKind.Depot],
+      ["hatch", BlockKind.Hatch],
+    ];
+    for (let i = 0; i < kinds.length; i++) {
+      const [key, kind] = kinds[i];
+      const model = editor();
+      model.selectPalette(key);
+      const cell = new IVec3(2, 3, 1);
+      assert.equal(model.placeAt(cell, 0), true);
+      const blueprint = model.blueprint();
+      const index = blueprint.indexAt(cell);
+      assert.ok(index >= 0, key + " was placed");
+      assert.equal(blueprint.blockAt(index).kind, kind);
+      assert.equal(blueprint.blockAt(index).material, MaterialId.Wood, key + " is wood");
+    }
+  });
+
+  // The other half of 2.1: the restriction is the editor's and nothing below it knows about
+  // it, so a design that arrives with a stone station keeps one.
+  it("keeps a stone station a stone station through a load and a rebuild", () => {
+    const cell = new IVec3(2, 1, 2);
+    const stone = new BlueprintBuilder()
+      .place(new IVec3(2, 0, 2), MaterialId.Stone, BlockKind.Structural, Direction.PosZ)
+      .place(cell, MaterialId.Stone, BlockKind.Station, Direction.NegZ)
+      .build("stone gun");
+    const model = editor();
+    model.load(stone, 0);
+    const built = model.blueprint();
+    const index = built.indexAt(cell);
+    assert.ok(index >= 0);
+    assert.equal(built.blockAt(index).kind, BlockKind.Station);
+    assert.equal(built.blockAt(index).material, MaterialId.Stone);
   });
 
   it("erases, and treats erasing an empty cell as no edit at all", () => {

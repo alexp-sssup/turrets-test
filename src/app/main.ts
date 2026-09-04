@@ -71,7 +71,7 @@ function main(): void {
     loadCase.build(standardStructure)
   );
   print('"' + standard.name + '" -- what each block is for');
-  print("  S station  D depot  C core  H hatch  # stone  + wood");
+  print("  S station  D depot  H hatch  # stone  + wood");
   printAll(HeatmapView.renderKinds(standardStructure));
   print("");
   print('"' + standard.name + '" -- per-joint utilization');

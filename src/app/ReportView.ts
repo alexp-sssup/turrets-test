@@ -130,6 +130,9 @@ export class ReportView {
         " attackers destroyed, " +
         result.stationDrySeconds.toFixed(0) +
         "s spent dry",
+      // Loss-conditions spec 4: silence is a state worth measuring even when it did not
+      // end the run, so it is reported next to the dry time it rhymes with.
+      "  silence   " + result.silencedSeconds.toFixed(0) + "s with no manned station",
       "  solver    " + result.structuralSolves.toString() + " structural analyses",
     ];
   }

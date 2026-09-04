@@ -1,23 +1,26 @@
 import { Replay } from "./ReplayRecorder";
 
-/** How a run ended. */
+/** How a run ended. Loss-conditions spec 3: one win and two losses, and no others. */
 export enum RunOutcome {
-  /** Spec 5: "core block intact after wave 5". */
+  /** Loss-conditions spec 3.3: five waves survived. */
   Won = 0,
-  /** The core went. */
-  CoreLost = 1,
-  /** Nothing left standing at all. */
-  Wrecked = 2,
+  /** Loss-conditions spec 3.1: nothing left standing at all. */
+  Wrecked = 1,
+  /**
+   * Loss-conditions spec 3.2: no alive station has a live gunner, checked after the
+   * inter-wave window. The guns are gone, or the crew are.
+   */
+  Unmanned = 2,
 }
 
 export function runOutcomeName(outcome: RunOutcome): string {
   if (outcome === RunOutcome.Won) {
     return "won";
   }
-  if (outcome === RunOutcome.CoreLost) {
-    return "core lost";
+  if (outcome === RunOutcome.Wrecked) {
+    return "wrecked";
   }
-  return "wrecked";
+  return "unmanned";
 }
 
 /**
@@ -40,6 +43,12 @@ export class RunResult {
   public readonly shotsFired: number;
   /** Seconds stations spent unable to fire. The cost of bad depot placement. */
   public readonly stationDrySeconds: number;
+  /**
+   * Loss-conditions spec 4: seconds the turret spent with no manned station at all.
+   * Silence during a wave is a state and not an outcome, so it is measured rather than
+   * ruled on.
+   */
+  public readonly silencedSeconds: number;
   public readonly finalLoadFactor: number;
   public readonly structuralSolves: number;
   public readonly elapsedSeconds: number;
@@ -55,6 +64,7 @@ export class RunResult {
     attackersDestroyed: number,
     shotsFired: number,
     stationDrySeconds: number,
+    silencedSeconds: number,
     finalLoadFactor: number,
     structuralSolves: number,
     elapsedSeconds: number
@@ -69,6 +79,7 @@ export class RunResult {
     this.attackersDestroyed = attackersDestroyed;
     this.shotsFired = shotsFired;
     this.stationDrySeconds = stationDrySeconds;
+    this.silencedSeconds = silencedSeconds;
     this.finalLoadFactor = finalLoadFactor;
     this.structuralSolves = structuralSolves;
     this.elapsedSeconds = elapsedSeconds;

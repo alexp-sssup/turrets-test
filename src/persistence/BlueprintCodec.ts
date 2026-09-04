@@ -6,7 +6,14 @@ import { Blueprint } from "../blueprint/Blueprint";
 import { BlueprintBlock } from "../blueprint/BlueprintBlock";
 
 /** Bumped whenever the on-disk shape changes. Refuse to guess at an unknown version. */
-export const BLUEPRINT_FORMAT_VERSION: number = 1;
+export const BLUEPRINT_FORMAT_VERSION: number = 2;
+
+/**
+ * Version 1 wrote five block kinds, with `core` at 3 and `hatch` at 4. Loss-conditions
+ * spec 2 deleted the core, so a v1 file's kind numbers mean something else now.
+ */
+const V1_KIND_CORE: number = 3;
+const V1_KIND_HATCH: number = 4;
 
 /**
  * Blueprint to text and back.
@@ -58,19 +65,21 @@ export class BlueprintCodec {
 
   public static decode(text: string): Blueprint {
     const payload = JSON.parse(text) as { version: number; name: string; blocks: number[] };
-    if (payload.version !== BLUEPRINT_FORMAT_VERSION) {
+    if (payload.version !== BLUEPRINT_FORMAT_VERSION && payload.version !== 1) {
       throw new Error("unsupported blueprint format version " + String(payload.version));
     }
     if (payload.blocks.length % 6 !== 0) {
       throw new Error("blueprint block data is not a multiple of six");
     }
+    const legacy = payload.version === 1;
     const blocks: BlueprintBlock[] = [];
     for (let i = 0; i < payload.blocks.length; i += 6) {
+      const kind = payload.blocks[i + 4];
       blocks.push(
         new BlueprintBlock(
           new IVec3(payload.blocks[i], payload.blocks[i + 1], payload.blocks[i + 2]),
           payload.blocks[i + 3] as MaterialId,
-          payload.blocks[i + 4] as BlockKind,
+          legacy ? BlueprintCodec.migrateKind(kind) : (kind as BlockKind),
           payload.blocks[i + 5] as Direction
         )
       );
@@ -79,5 +88,21 @@ export class BlueprintCodec {
       return IVec3.compare(a.position, b.position);
     });
     return new Blueprint(payload.name, blocks);
+  }
+
+  /**
+   * Loss-conditions spec 2: a saved core becomes plain frame of the same material, so the
+   * design keeps its geometry, its mass and its bill of materials, and the library survives
+   * the change. Spec 3 calls that library "the entire cross-run progression", which is why
+   * a v1 file is migrated rather than refused.
+   */
+  private static migrateKind(kind: number): BlockKind {
+    if (kind === V1_KIND_CORE) {
+      return BlockKind.Structural;
+    }
+    if (kind === V1_KIND_HATCH) {
+      return BlockKind.Hatch;
+    }
+    return kind as BlockKind;
   }
 }

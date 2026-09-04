@@ -339,7 +339,7 @@ describe("RunSimulation", () => {
 });
 
 describe("RunSimulation: the full P0 run", () => {
-  it("survives five waves with the core intact, and exercises every system on the way", () => {
+  it("survives five waves manned, and exercises every system on the way", () => {
     const script = WaveScript.p0(arena.laneCentreX);
     const simulation = RunSimulation.withDefaults(dials, arena);
     const result = simulation.run(
@@ -350,7 +350,7 @@ describe("RunSimulation: the full P0 run", () => {
       2026
     );
 
-    // Spec 5's win condition.
+    // Loss-conditions spec 3.3's win condition.
     assert.equal(result.outcome, RunOutcome.Won, runOutcomeName(result.outcome));
     assert.equal(result.wavesSurvived, 5);
     assert.equal(result.won, true);

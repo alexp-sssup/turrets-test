@@ -22,9 +22,12 @@ export enum RunEventKind {
   RepairCompleted = 15,
   /** The load factor crossed below 1, or back above it. */
   MarginChanged = 16,
-  CoreDestroyed = 17,
-  RunWon = 18,
-  RunLost = 19,
+  /** Loss-conditions spec 4: the last manned station went quiet. Not a loss on its own. */
+  TurretSilenced = 17,
+  /** Loss-conditions spec 4: a station is manned again, so the silence had an end. */
+  TurretRemanned = 18,
+  RunWon = 19,
+  RunLost = 20,
 }
 
 export function runEventKindName(kind: RunEventKind): string {
@@ -46,7 +49,8 @@ export function runEventKindName(kind: RunEventKind): string {
     "crew killed",
     "repair completed",
     "margin changed",
-    "core destroyed",
+    "turret silenced",
+    "turret remanned",
     "run won",
     "run lost",
   ];

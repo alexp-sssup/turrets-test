@@ -49,9 +49,10 @@ export class WorkedExamples {
       new WorkedExample(
         "stone-box",
         "stone keep",
-        "This one holds. Two rings of stone, a sunk core, and nothing in five waves gets " +
-          "through it -- for 171 material and one gun. Ask what you would knock down to " +
-          "afford a second station, and watch the solver readout while it runs.",
+        "This one holds. Two rings of stone, and nothing in five waves gets through it -- " +
+          "for 168 material and one gun. That gun is also the only thing keeping the run " +
+          "alive, so ask what you would knock down to afford a second station, and watch " +
+          "the solver readout while it runs.",
         WorkedExamples.stoneBox()
       ),
       new WorkedExample(
@@ -101,11 +102,10 @@ export class WorkedExamples {
       BlockKind.Structural,
       Direction.PosZ
     );
-    // The core sits at wall height rather than sunk into the floor. That is the second
-    // thing wrong with this design and the tester is not told about it: a flat kinetic
-    // trajectory can reach it through the front wall, so once the gun is gone there is
-    // nothing stopping the lane.
-    builder.place(new IVec3(2, 1, 2), MaterialId.Stone, BlockKind.Core, Direction.PosZ);
+    // A lone stone block at wall height, left over from where the core used to sit
+    // (loss-conditions spec 2). It stays because the fixture's numbers -- the 0.96 margin
+    // the comment below turns on -- were tuned with this mass in the box.
+    builder.place(new IVec3(2, 1, 2), MaterialId.Stone, BlockKind.Structural, Direction.PosZ);
     WorkedExamples.perimeter(builder, MaterialId.Wood);
     // The arm: a five-voxel wood cantilever over the lane with a gun on the end of it.
     // Five is the number the solver picks out. Wood runs out of *bending* capacity at
@@ -128,12 +128,13 @@ export class WorkedExamples {
    * An over-braced stone box that is too expensive to arm properly.
    *
    * This one does not fall over, and that is the point of shipping it. It survives all five
-   * waves behind two rings of stone and a sunk core, and the bill it hands you for that is
-   * 171 material -- four times the wood frame -- for a single gun. It is P0's honest answer
-   * about blobs: the pressure against them here is cost and firepower rather than collapse,
-   * which is exactly the partial answer UI spec 2 warns a 2D build can give to §1.3.
+   * waves behind two rings of stone, and the bill it hands you for that is 168 material --
+   * four times the wood frame -- for a single gun. It is P0's honest answer about blobs:
+   * the pressure against them here is cost and firepower rather than collapse, which is
+   * exactly the partial answer UI spec 2 warns a 2D build can give to §1.3. Loss-conditions
+   * spec 3.2 sharpens it: one gun is also one station block away from a lost run.
    *
-   * It is also the design that shows a tester where the solver runs out. At 59 blocks a
+   * It is also the design that shows a tester where the solver runs out. At 58 blocks a
    * re-solve costs around 300 ms against a 16 ms budget (docs/structural-solver.md), and
    * the dev readout says so while they watch.
    */
@@ -146,7 +147,6 @@ export class WorkedExamples {
       BlockKind.Structural,
       Direction.PosZ
     );
-    builder.place(new IVec3(2, 0, 2), MaterialId.Stone, BlockKind.Core, Direction.PosZ);
     for (let y = 1; y <= 2; y++) {
       WorkedExamples.perimeterAt(builder, MaterialId.Stone, y);
     }
@@ -172,9 +172,6 @@ export class WorkedExamples {
       BlockKind.Structural,
       Direction.PosZ
     );
-    // A wood core, which is the decision this example is really about: it saves two
-    // material and it puts the win condition inside the flammable body.
-    builder.place(new IVec3(2, 0, 2), MaterialId.Wood, BlockKind.Core, Direction.PosZ);
     WorkedExamples.perimeter(builder, MaterialId.Wood);
     builder.place(new IVec3(1, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
     builder.place(new IVec3(3, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);

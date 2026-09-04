@@ -13,7 +13,7 @@ const FAILURE_KINDS: readonly RunEventKind[] = [
   RunEventKind.StationStarved,
   RunEventKind.DepotDetonated,
   RunEventKind.BlockConsumedByFire,
-  RunEventKind.CoreDestroyed,
+  RunEventKind.TurretSilenced,
 ];
 
 /** One row of the failure chain, with the index of the frame it happened on. */
@@ -405,16 +405,18 @@ export class RunPanels {
     rows: readonly ChainRow[]
   ): string {
     if (record.survived) {
-      return "five waves, core intact.";
+      return "five waves held.";
     }
     if (outcome === RunOutcome.Wrecked) {
       return "nothing left standing.";
     }
+    // Loss-conditions spec 3.2. The outcome says the guns fell silent; the failure chain
+    // says what silenced them, which is the half the player can act on.
     if (record.firstFailedJoint !== null) {
       const joint = record.firstFailedJoint;
       const low = joint.blockLow < 0 ? "the ground" : "block #" + joint.blockLow.toString();
       return (
-        "the core went, and the structure started coming apart at " +
+        "the guns went with the structure, which started coming apart at " +
         low +
         " → block #" +
         joint.blockHigh.toString() +
@@ -423,13 +425,13 @@ export class RunPanels {
     }
     for (let i = 0; i < rows.length; i++) {
       if (rows[i].event.kind === RunEventKind.BlockConsumedByFire) {
-        return "the core went after fire ate its way through the frame.";
+        return "the guns went after fire ate its way through the frame.";
       }
       if (rows[i].event.kind === RunEventKind.DepotDetonated) {
-        return "the core went after a depot cooked off inside the turret.";
+        return "the guns went after a depot cooked off inside the turret.";
       }
     }
-    return "the core was shot out. nothing collapsed on the way.";
+    return "no station left manned. nothing collapsed on the way.";
   }
 
   public static row(label: string, value: string): string {

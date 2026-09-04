@@ -157,9 +157,6 @@ export class Palette {
     if (kind === BlockKind.Depot) {
       return "#ffb43a";
     }
-    if (kind === BlockKind.Core) {
-      return "#54d18c";
-    }
     if (kind === BlockKind.Hatch) {
       return "#b98bff";
     }
@@ -172,9 +169,6 @@ export class Palette {
     }
     if (kind === BlockKind.Depot) {
       return "▣";
-    }
-    if (kind === BlockKind.Core) {
-      return "✦";
     }
     if (kind === BlockKind.Hatch) {
       return "≡";

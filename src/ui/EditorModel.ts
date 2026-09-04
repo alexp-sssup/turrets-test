@@ -107,7 +107,6 @@ export class EditorModel {
       new PaletteEntry("station", "station", MaterialId.Wood, BlockKind.Station, false),
       new PaletteEntry("depot", "depot", MaterialId.Wood, BlockKind.Depot, false),
       new PaletteEntry("hatch", "hatch", MaterialId.Wood, BlockKind.Hatch, false),
-      new PaletteEntry("core", "core", MaterialId.Stone, BlockKind.Core, false),
       new PaletteEntry("erase", "erase", MaterialId.Wood, BlockKind.Structural, true),
     ];
   }

@@ -40,9 +40,6 @@ export class HeatmapView {
       if (kind === BlockKind.Depot) {
         return "D";
       }
-      if (kind === BlockKind.Core) {
-        return "C";
-      }
       if (kind === BlockKind.Hatch) {
         return "H";
       }

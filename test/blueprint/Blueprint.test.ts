@@ -13,7 +13,7 @@ import { ConstantBudgetProvider } from "../../src/blueprint/BudgetProvider";
 function simpleBuilder(): BlueprintBuilder {
   return new BlueprintBuilder()
     .fillBox(new IVec3(0, 0, 0), new IVec3(2, 0, 2), MaterialId.Stone, BlockKind.Structural, Direction.PosZ)
-    .place(new IVec3(1, 1, 1), MaterialId.Wood, BlockKind.Core, Direction.PosZ)
+    .place(new IVec3(1, 1, 1), MaterialId.Wood, BlockKind.Depot, Direction.PosZ)
     .place(new IVec3(0, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegX);
 }
 
@@ -40,11 +40,11 @@ describe("BlueprintBuilder", () => {
   it("replaces rather than duplicates a position", () => {
     const builder = new BlueprintBuilder()
       .place(new IVec3(0, 0, 0), MaterialId.Wood, BlockKind.Structural, Direction.PosZ)
-      .place(new IVec3(0, 0, 0), MaterialId.Stone, BlockKind.Core, Direction.PosZ);
+      .place(new IVec3(0, 0, 0), MaterialId.Stone, BlockKind.Hatch, Direction.PosZ);
     assert.equal(builder.blockCount, 1);
     const blueprint = builder.build("replaced");
     assert.equal(blueprint.blockAt(0).material, MaterialId.Stone);
-    assert.equal(blueprint.blockAt(0).kind, BlockKind.Core);
+    assert.equal(blueprint.blockAt(0).kind, BlockKind.Hatch);
   });
 
   it("removes blocks", () => {
@@ -99,14 +99,14 @@ describe("Blueprint", () => {
   it("indexes by position and by kind", () => {
     const blueprint = simpleBuilder().build("indexed");
     assert.equal(blueprint.blockCount, 11);
-    assert.equal(blueprint.countOfKind(BlockKind.Core), 1);
+    assert.equal(blueprint.countOfKind(BlockKind.Depot), 1);
     assert.equal(blueprint.countOfKind(BlockKind.Station), 1);
     assert.equal(blueprint.countOfKind(BlockKind.Structural), 9);
-    assert.equal(blueprint.countOfKind(BlockKind.Depot), 0);
+    assert.equal(blueprint.countOfKind(BlockKind.Hatch), 0);
 
-    const core = blueprint.blockAtPosition(new IVec3(1, 1, 1));
-    assert.notEqual(core, null);
-    assert.equal((core as BlueprintBlock).kind, BlockKind.Core);
+    const depot = blueprint.blockAtPosition(new IVec3(1, 1, 1));
+    assert.notEqual(depot, null);
+    assert.equal((depot as BlueprintBlock).kind, BlockKind.Depot);
     assert.equal(blueprint.blockAtPosition(new IVec3(9, 9, 9)), null);
     assert.equal(blueprint.indexAt(new IVec3(9, 9, 9)), -1);
     assert.equal(blueprint.hasBlockAt(new IVec3(0, 0, 0)), true);

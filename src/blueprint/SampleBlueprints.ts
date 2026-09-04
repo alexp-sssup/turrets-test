@@ -22,15 +22,14 @@ export class SampleBlueprints {
 
   /**
    * A sound, valid, affordable turret: stone floor, wood walls, two stations covering the
-   * lane, two dispersed depots, a hatch at the back, and the core sunk into the stone floor
-   * where a flat trajectory cannot reach it. 43 blocks and 93 of the 500 material budget,
-   * so there is plenty of room for a player to make it worse.
+   * lane, two dispersed depots and a hatch at the back. 43 blocks and 93 of the 500
+   * material budget, so there is plenty of room for a player to make it worse.
    *
-   * The core's placement is the fixture's one piece of real design. An earlier version put
-   * it at wall height directly behind the middle station, and three light kinetic rounds
-   * ended the run in wave one: the first two killed the station and the third carried
-   * through the gap into the core. Sinking it into the floor is the fix a player would
-   * arrive at, and it is the sort of thing P0 exists to surface.
+   * The two stations are the fixture's one piece of real design, and loss-conditions spec
+   * 3.2 is why. A single station covering the lane is one lucky penetration from a turret
+   * that cannot shoot, and a turret that cannot shoot has lost the run at the end of the
+   * window. The pair is the cheapest redundancy that answers that, which is the sort of
+   * thing P0 exists to surface.
    */
   public static standardTurret(): Blueprint {
     const builder = new BlueprintBuilder();
@@ -41,7 +40,6 @@ export class SampleBlueprints {
       BlockKind.Structural,
       Direction.PosZ
     );
-    builder.place(new IVec3(2, 0, 2), MaterialId.Stone, BlockKind.Core, Direction.PosZ);
     SampleBlueprints.addWalls(builder);
     builder.place(new IVec3(1, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
     builder.place(new IVec3(3, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
@@ -74,7 +72,6 @@ export class SampleBlueprints {
     SampleBlueprints.addWalls(builder);
     builder.place(new IVec3(2, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
     builder.place(new IVec3(2, 1, 4), MaterialId.Wood, BlockKind.Hatch, Direction.PosZ);
-    builder.place(new IVec3(2, 0, 2), MaterialId.Stone, BlockKind.Core, Direction.PosZ);
     // A depot in its own sealed cell in the corner, walled in on both open sides.
     builder.place(new IVec3(3, 1, 3), MaterialId.Wood, BlockKind.Depot, Direction.PosZ);
     builder.place(new IVec3(2, 1, 3), MaterialId.Wood, BlockKind.Structural, Direction.PosZ);
@@ -114,7 +111,9 @@ export class SampleBlueprints {
     builder.place(new IVec3(1, 3, -5), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
     builder.place(new IVec3(0, 1, 0), MaterialId.Wood, BlockKind.Depot, Direction.PosZ);
     builder.place(new IVec3(2, 1, 2), MaterialId.Wood, BlockKind.Hatch, Direction.PosZ);
-    builder.place(new IVec3(0, 1, 2), MaterialId.Wood, BlockKind.Core, Direction.PosZ);
+    // Loss-conditions spec 2: this cell used to carry the core. It stays as plain frame so
+    // the fixture keeps the mass and the bill it was tuned against.
+    builder.place(new IVec3(0, 1, 2), MaterialId.Wood, BlockKind.Structural, Direction.PosZ);
     return builder.build("overreaching");
   }
 

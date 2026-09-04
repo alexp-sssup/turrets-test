@@ -24,24 +24,29 @@ list or merge first; the deploy job reports that separately.
 
 The first session opens **mid-loop**, not in the editor (§7.2): a deliberately flawed worked
 example is already on the pad, and the only thing to do is start wave 1. The example's gun is
-on a five-voxel wood cantilever with a margin of 0.96, so the arm shears on the first solve,
-the core is reachable through the front wall, and the run is over in about twenty seconds of
-arena time. Then the replay opens itself, names the joint that went first, and the way out of
-it is *fix this blueprint* — which lands in the editor with that joint selected and the stress
-overlay already on.
+on a five-voxel wood cantilever with a margin of 0.96, so the arm shears on the first solve —
+and the arm *was* the gun. The turret stands there silent for the rest of the wave and the run
+ends unmanned at the window (loss-conditions spec 3.2). Then the replay opens itself, names the
+joint that went first, and the way out of it is *fix this blueprint* — which lands in the
+editor with that joint selected and the stress overlay already on.
 
 Three worked examples ship (`src/data/WorkedExamples.ts`), each failing a different way:
 
 | Example | What it does in P0 |
 |---|---|
-| **reaching gun** | Stands at rest at 0.96, shears its arm root immediately, loses the core in wave 1. |
-| **wood frame** | Cheap, well armed, one contiguous flammable body with a wood core. Dies in wave 3. |
-| **stone keep** | Survives all five waves for 171 material and one gun — and re-solves in ~300 ms. |
+| **reaching gun** | Stands at rest at 0.96, shears its arm root immediately, and ends wave 1 unmanned. |
+| **wood frame** | Cheap, well armed, one contiguous flammable body. Burns to nothing in wave 3. |
+| **stone keep** | Survives all five waves for 168 material and one gun — and re-solves in ~300 ms. |
 
 The keep is the honest exception to "each fails a different way". It does not fall over,
-because P0's pressure against a blob is cost and firepower rather than collapse, and because
-a core sunk in a stone floor is unreachable by this wave script. That is a finding, not a
-fudge, and §1.3 gets a partial answer here exactly as the spec warns it will.
+because P0's pressure against a blob is cost and firepower rather than collapse. That is a
+finding, not a fudge, and §1.3 gets a partial answer here exactly as the spec warns it will.
+
+It is also where the loss conditions earn their keep. The keep wins, and it spends 211 of its
+265 arena seconds unable to shoot: its single gunner is shot through the port in wave 1 and
+again in wave 4, and a station can only be re-manned at the inter-wave window (§4.4). Two
+rings of stone carry it over the line anyway. "One gun is one crew member away from silent"
+is a sharper thing to hand a tester than any rule about a block that has to survive.
 
 ## Layout
 

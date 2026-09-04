@@ -8,6 +8,7 @@ import { WeaponClass, WeaponClassId, WeaponTable } from "../materials/WeaponTabl
 import { BlockKind } from "../blueprint/BlockKind";
 import { Blueprint } from "../blueprint/Blueprint";
 import { AssignmentPlan } from "../crew/AssignmentPlan";
+import { CrewRole } from "../crew/CrewMember";
 import { CrewPool } from "../crew/CrewPool";
 import { LogisticsSystem } from "../crew/LogisticsSystem";
 import { RepairSystem } from "../crew/RepairSystem";
@@ -27,7 +28,7 @@ import { CombatLoadCase } from "./CombatLoadCase";
 import { InputSource } from "./InputSource";
 import { InputKind, Replay, ReplayRecorder } from "./ReplayRecorder";
 import { RunEvent, RunEventKind } from "./RunEvent";
-import { RunOutcome, RunResult } from "./RunResult";
+import { RunOutcome, RunResult, runOutcomeName } from "./RunResult";
 import { ShotTrace } from "./ShotTrace";
 import { TargetingSystem } from "./TargetingSystem";
 import { WaveScript } from "./WaveScript";
@@ -100,6 +101,10 @@ export class RunLoop {
   private lastSolveVersion: number;
   private lastLoadStamp: number;
   private lastLoadFactor: number;
+  /** Loss-conditions spec 4: how long the turret has had no manned station, in total. */
+  private silencedSeconds: number;
+  /** The state the last silence check saw, so the two events fire on the edges only. */
+  private silenced: boolean;
 
   private phaseValue: RunPhase;
   private outcome: RunOutcome;
@@ -166,6 +171,8 @@ export class RunLoop {
     this.lastLoadFactor = Number.POSITIVE_INFINITY;
 
     this.phaseValue = RunPhase.Ready;
+    this.silencedSeconds = 0;
+    this.silenced = false;
     this.outcome = RunOutcome.Won;
     this.wavesSurvivedValue = 0;
     this.waveTime = 0;
@@ -353,6 +360,7 @@ export class RunLoop {
       this.attackersDestroyed,
       this.shotsFired,
       this.totalDrySeconds(),
+      this.silencedSeconds,
       this.lastLoadFactor,
       this.structuralSolves,
       this.time
@@ -389,12 +397,7 @@ export class RunLoop {
     this.time += step;
     this.waveTime += step;
 
-    if (!this.coreIntact()) {
-      this.outcome = RunOutcome.CoreLost;
-      this.recorder.record(this.time, this.wave, RunEventKind.CoreDestroyed, -1, -1, 0, "");
-      this.lost = true;
-      return TickResult.WaveOver;
-    }
+    this.trackSilence(step);
     if (this.structureValue.aliveCount === 0) {
       this.outcome = RunOutcome.Wrecked;
       this.lost = true;
@@ -429,6 +432,15 @@ export class RunLoop {
       this.finish();
       return;
     }
+    // Loss-conditions spec 3.2, and 3.3 for why it sits after the wave-count test: the
+    // question is "can this design fight the next wave", so it is only asked when there is
+    // one, and only once repair has rebuilt what it could and crew have re-manned.
+    if (!this.hasMannedStation()) {
+      this.outcome = RunOutcome.Unmanned;
+      this.lost = true;
+      this.finish();
+      return;
+    }
     this.wave++;
     this.phaseValue = RunPhase.BetweenWaves;
   }
@@ -441,7 +453,9 @@ export class RunLoop {
       -1,
       -1,
       this.wavesSurvivedValue,
-      ""
+      // Loss-conditions spec 3 gives a run two ways to be lost, so the line that ends the
+      // replay has to say which one it was.
+      runOutcomeName(this.outcome)
     );
     this.phaseValue = RunPhase.Finished;
   }
@@ -917,14 +931,61 @@ export class RunLoop {
     this.assignCrew();
   }
 
-  private coreIntact(): boolean {
-    const cores = this.blueprint.indicesOfKind(BlockKind.Core);
-    for (let i = 0; i < cores.length; i++) {
-      if (this.structureValue.isAlive(cores[i])) {
+  /**
+   * Loss-conditions spec 3.2: is there an alive station block with a live gunner assigned
+   * to it?
+   *
+   * Spec 4.2 makes this the whole of the turret's ability to fight -- "firepower equals
+   * manned stations" -- so it is false in exactly the two cases spec 3.2 names: the
+   * stations are gone, or the crew are.
+   *
+   * The question is about the *assignment*, not about where the gunner is standing this
+   * tick. `CrewPool.gunnerAt` answers the second one, because a gunner away on a resupply
+   * trip has `stationedAt` pointing at the depot they walked to -- which is right for "can
+   * this gun fire right now" and wrong here. Spec 4.3 designs that walk in as the lull that
+   * makes rate of fire burst-and-lull; a turret whose gunner is fetching shot has not lost
+   * its guns, and counting it as silent would both inflate spec 4's metric and, at the
+   * inter-wave check, end runs on a crew member being three voxels from their post.
+   */
+  private hasMannedStation(): boolean {
+    if (this.crewValue.countInRole(CrewRole.Gunner) === 0) {
+      return false;
+    }
+    // The blueprint's index, not `aliveOfKind`, because this runs every tick and that one
+    // builds an array to hand back.
+    const stations = this.blueprint.indicesOfKind(BlockKind.Station);
+    for (let i = 0; i < stations.length; i++) {
+      if (this.structureValue.isAlive(stations[i])) {
         return true;
       }
     }
     return false;
+  }
+
+  /**
+   * Loss-conditions spec 4: silence during a wave is a state, not an outcome. It is timed,
+   * and its two edges are recorded, so the replay can say when the guns stopped and whether
+   * they ever started again -- but the run continues, because the wave the player is losing
+   * is already the punishment.
+   */
+  private trackSilence(step: number): void {
+    const nowSilenced = !this.hasMannedStation();
+    if (nowSilenced) {
+      this.silencedSeconds += step;
+    }
+    if (nowSilenced === this.silenced) {
+      return;
+    }
+    this.silenced = nowSilenced;
+    this.recorder.record(
+      this.time,
+      this.wave,
+      this.silenced ? RunEventKind.TurretSilenced : RunEventKind.TurretRemanned,
+      -1,
+      -1,
+      this.silencedSeconds,
+      ""
+    );
   }
 
   private aliveUnitCount(): number {

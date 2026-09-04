@@ -155,14 +155,6 @@ export class BlueprintValidator {
   }
 
   private checkRequiredBlocks(blueprint: Blueprint, violations: Violation[]): void {
-    const cores = blueprint.countOfKind(BlockKind.Core);
-    if (cores === 0) {
-      violations.push(new Violation(ViolationKind.NoCoreBlock, -1, "the win condition needs one"));
-    } else if (cores > 1) {
-      violations.push(
-        new Violation(ViolationKind.MultipleCoreBlocks, -1, cores.toString() + " cores")
-      );
-    }
     if (blueprint.countOfKind(BlockKind.Station) === 0) {
       violations.push(new Violation(ViolationKind.NoStation, -1, "firepower equals manned stations"));
     }

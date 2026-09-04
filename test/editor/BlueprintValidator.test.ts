@@ -113,18 +113,19 @@ describe("BlueprintValidator: designs that should not pass", () => {
       .fillBox(new IVec3(0, 0, 0), new IVec3(1, 0, 1), MaterialId.Stone, BlockKind.Structural, Direction.PosZ)
       .build("bare");
     const report = validator.validate(bare, pad, budget);
-    assert.equal(report.has(ViolationKind.NoCoreBlock), true);
     assert.equal(report.has(ViolationKind.NoStation), true);
     assert.equal(report.has(ViolationKind.NoDepot), true);
     assert.equal(report.has(ViolationKind.NoHatch), true);
     assert.equal(report.stationReadouts.length, 0);
   });
 
-  it("flags two cores", () => {
+  // Loss-conditions spec 2: neither "no core block" nor "more than one core block" is a
+  // rule any more, and a second station is redundancy rather than a violation.
+  it("does not object to a second station", () => {
     const builder = BlueprintBuilder.fromBlueprint(SampleBlueprints.standardTurret());
-    builder.place(new IVec3(3, 1, 1), MaterialId.Wood, BlockKind.Core, Direction.PosZ);
-    const report = validator.validate(builder.build("two cores"), pad, budget);
-    assert.equal(report.has(ViolationKind.MultipleCoreBlocks), true);
+    builder.place(new IVec3(2, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
+    const report = validator.validate(builder.build("three stations"), pad, budget);
+    assert.equal(report.isValid, true, report.violations.map((v) => v.describe()).join("; "));
   });
 
   it("flags going over budget, using the provider rather than a constant", () => {
@@ -148,7 +149,7 @@ describe("BlueprintValidator: designs that should not pass", () => {
     // holding it up.
     const offPad = new BlueprintBuilder()
       .fillBox(new IVec3(20, 0, 20), new IVec3(21, 0, 21), MaterialId.Stone, BlockKind.Structural, Direction.PosZ)
-      .place(new IVec3(20, 1, 20), MaterialId.Wood, BlockKind.Core, Direction.PosZ)
+      .place(new IVec3(20, 1, 20), MaterialId.Wood, BlockKind.Hatch, Direction.PosZ)
       .build("off pad");
     const report = validator.validate(offPad, pad, budget);
     assert.equal(report.has(ViolationKind.DisconnectedBlocks), true);

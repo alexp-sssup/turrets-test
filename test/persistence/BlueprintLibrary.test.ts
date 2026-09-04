@@ -49,6 +49,28 @@ describe("BlueprintCodec", () => {
     }
   });
 
+  /**
+   * Loss-conditions spec 2: a v1 file's core becomes plain frame of the same material, and
+   * v1's hatch (kind 4) has to keep meaning hatch even though hatch is now 3. Spec 3 calls
+   * the library "the entire cross-run progression", so a tester's saved designs survive the
+   * change with their geometry, mass and bill intact.
+   */
+  it("migrates a version 1 file: the core becomes frame, the hatch stays a hatch", () => {
+    // x, y, z, material, kind, facing -- one stone core and one wood hatch, v1 numbering.
+    const v1 =
+      '{"version":1,"name":"legacy","blocks":[' +
+      "0,0,0," + (MaterialId.Stone as number).toString() + ",3," + (Direction.PosZ as number).toString() + "," +
+      "1,0,0," + (MaterialId.Wood as number).toString() + ",4," + (Direction.PosZ as number).toString() +
+      "]}";
+    const restored = BlueprintCodec.decode(v1);
+    assert.equal(restored.blockCount, 2);
+    assert.equal(restored.blockAt(0).kind, BlockKind.Structural);
+    assert.equal(restored.blockAt(0).material, MaterialId.Stone);
+    assert.equal(restored.blockAt(1).kind, BlockKind.Hatch);
+    // The migration costs nothing, which is what makes it safe to apply silently.
+    assert.equal(restored.totalCost(materials), 4);
+  });
+
   it("refuses a version it does not understand", () => {
     assert.throws(() => BlueprintCodec.decode('{"version":99,"name":"x","blocks":[]}'));
     assert.throws(() =>

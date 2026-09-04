@@ -39,6 +39,7 @@ function dialsWith(crew: number, waves: number): Dials {
     base.tickSeconds,
     base.gravity,
     base.voxelSize,
+    base.hatchCapacityFactor,
     base.predictiveThreshold,
     base.repairSecondsPerVoxel,
     base.handlingSeconds,

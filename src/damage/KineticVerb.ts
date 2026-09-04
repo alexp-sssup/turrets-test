@@ -52,7 +52,11 @@ export class KineticVerb implements DamageVerb {
 
     for (let depth = 0; depth <= impact.penetrationDepth && remaining > 0; depth++) {
       const block = structure.indexAt(cell);
-      if (block < 0) {
+      // Hatches spec 5: a hatch is not a contact. A hole is a hole, so a solid round passes
+      // through it, spends nothing on it and damages it not at all, and goes on to strike
+      // whatever is behind -- which is what makes a door on the lane face a firing port
+      // into your own turret.
+      if (block < 0 || structure.kindOf(block) === BlockKind.Hatch) {
         cell = cell.add(step); // through a hole, or through air before the first hit
         continue;
       }
@@ -131,7 +135,10 @@ export class KineticVerb implements DamageVerb {
     const step = Directions.offset(heading);
     let cell = origin;
     for (let i = 0; i < maxSteps; i++) {
-      if (structure.indexAt(cell) >= 0) {
+      const block = structure.indexAt(cell);
+      // Hatches spec 5: a round that finds only hatches all the way through leaves by the
+      // far side and hits nothing. A wasted shot is the correct outcome, not a special case.
+      if (block >= 0 && structure.kindOf(block) !== BlockKind.Hatch) {
         return cell;
       }
       cell = cell.add(step);

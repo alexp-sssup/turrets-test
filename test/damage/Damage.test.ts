@@ -27,6 +27,54 @@ function rowOf(length: number, material: MaterialId, name: string): BlockStructu
   return new BlockStructure(builder.build(name));
 }
 
+/** A row of wood along z, with the cells named in `hatches` tagged as openings. */
+function rowWithHatches(length: number, hatches: readonly number[], name: string): BlockStructure {
+  const builder = new BlueprintBuilder();
+  for (let z = 0; z < length; z++) {
+    const opening = hatches.indexOf(z) >= 0;
+    builder.place(
+      new IVec3(0, 0, z),
+      MaterialId.Wood,
+      opening ? BlockKind.Hatch : BlockKind.Structural,
+      Direction.PosZ
+    );
+  }
+  return new BlockStructure(builder.build(name));
+}
+
+describe("hatches spec 5: a hatch does not stop a shot", () => {
+  const verb = KineticVerb.withDefaults(materials);
+
+  it("is not a contact: the round passes through it to whatever is behind", () => {
+    // A hatch at the front of the row, plain wood behind it.
+    const structure = rowWithHatches(4, [0], "hatch-fronted");
+    const contact = KineticVerb.firstContact(structure, new IVec3(0, 0, 0), Direction.PosZ, 8);
+    assert.notEqual(contact, null);
+    assert.equal((contact as IVec3).z, 1, "the first solid block, not the door in front of it");
+  });
+
+  it("spends nothing on the hatch and damages it not at all", () => {
+    const structure = rowWithHatches(4, [0], "hatch-fronted");
+    // Solid shot carries 24 damage; wood has 10 integrity. Two solid voxels die and the
+    // third takes 4, exactly as if the hatch were an empty cell.
+    const impact = new Impact(new IVec3(0, 0, 0), Direction.PosZ, AmmoLoadId.SolidShot, 24, 4);
+    const result = verb.apply(structure, impact);
+    assert.equal(structure.isAlive(0), true, "the hatch is untouched");
+    assert.equal(structure.damageOf(0), 0);
+    assert.deepEqual(Array.from(result.destroyedBlocks), [1, 2]);
+    assert.equal(structure.damageOf(3), 4);
+  });
+
+  it("lets a round that finds only hatches leave by the far side", () => {
+    const structure = rowWithHatches(3, [0, 1, 2], "all doors");
+    assert.equal(
+      KineticVerb.firstContact(structure, new IVec3(0, 0, 0), Direction.PosZ, 8),
+      null,
+      "a wasted shot is the correct outcome, not a special case"
+    );
+  });
+});
+
 describe("KineticVerb", () => {
   const verb = KineticVerb.withDefaults(materials);
 

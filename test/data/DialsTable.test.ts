@@ -25,6 +25,7 @@ describe("DialsTable", (): void => {
       tickSeconds: 0.1,
       gravity: 9.81,
       voxelSize: 1,
+      hatchCapacityFactor: 0.2,
       predictiveThreshold: 0.9,
       repairSecondsPerVoxel: 1,
       handlingSeconds: 0.5,
@@ -34,5 +35,7 @@ describe("DialsTable", (): void => {
     assert.equal(dials.materialBudget, 250);
     assert.equal(dials.tickSeconds, 0.1);
     assert.equal(dials.predictiveThreshold, 0.9);
+    // Hatches spec 6: the new dial travels through the record like every other one.
+    assert.equal(dials.hatchCapacityFactor, 0.2);
   });
 });

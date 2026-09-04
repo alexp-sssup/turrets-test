@@ -39,7 +39,13 @@ export class Harness {
   }
 
   public jointsOf(structure: BlockStructure, pad: PadSurface): JointGraph {
-    return JointGraph.build(structure, this.materials, pad, this.dials.voxelSize);
+    return JointGraph.build(
+      structure,
+      this.materials,
+      pad,
+      this.dials.voxelSize,
+      this.dials.hatchCapacityFactor
+    );
   }
 
   public gravityOf(structure: BlockStructure): LoadSet {

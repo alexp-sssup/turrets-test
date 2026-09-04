@@ -17,6 +17,7 @@ export interface DialsRecord {
   readonly tickSeconds: number;
   readonly gravity: number;
   readonly voxelSize: number;
+  readonly hatchCapacityFactor: number;
   readonly predictiveThreshold: number;
   readonly repairSecondsPerVoxel: number;
   readonly handlingSeconds: number;
@@ -67,6 +68,7 @@ export class DialsTable {
       record.tickSeconds,
       record.gravity,
       record.voxelSize,
+      record.hatchCapacityFactor,
       record.predictiveThreshold,
       record.repairSecondsPerVoxel,
       record.handlingSeconds,
@@ -91,6 +93,7 @@ export class DialsTable {
       "tickSeconds",
       "gravity",
       "voxelSize",
+      "hatchCapacityFactor",
       "predictiveThreshold",
       "repairSecondsPerVoxel",
       "handlingSeconds",
@@ -123,6 +126,7 @@ export class DialsTable {
       dials.tickSeconds,
       dials.gravity,
       dials.voxelSize,
+      dials.hatchCapacityFactor,
       dials.predictiveThreshold,
       dials.repairSecondsPerVoxel,
       dials.handlingSeconds,

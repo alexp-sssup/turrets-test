@@ -26,6 +26,14 @@ export class Dials {
   public readonly gravity: number;
   /** Edge length of one voxel, in the same units as positions. */
   public readonly voxelSize: number;
+  /**
+   * Hatches spec 3: the fraction of its capacity a joint keeps when either end is a hatch.
+   *
+   * Must be greater than zero. A joint whose factor reaches zero is not weak, it is absent
+   * from the joint graph, so a zero here would drop every hatch out of every turret on the
+   * first solve (hatches spec 3.1).
+   */
+  public readonly hatchCapacityFactor: number;
   /** Joints at or above this utilization are reported as predictive highlights. */
   public readonly predictiveThreshold: number;
   /** Seconds a crew member needs to repair one voxel back to blueprint. */
@@ -56,6 +64,7 @@ export class Dials {
     tickSeconds: number,
     gravity: number,
     voxelSize: number,
+    hatchCapacityFactor: number,
     predictiveThreshold: number,
     repairSecondsPerVoxel: number,
     handlingSeconds: number,
@@ -75,6 +84,7 @@ export class Dials {
     this.tickSeconds = tickSeconds;
     this.gravity = gravity;
     this.voxelSize = voxelSize;
+    this.hatchCapacityFactor = hatchCapacityFactor;
     this.predictiveThreshold = predictiveThreshold;
     this.repairSecondsPerVoxel = repairSecondsPerVoxel;
     this.handlingSeconds = handlingSeconds;
@@ -98,6 +108,8 @@ export class Dials {
       0.05, // tick, seconds (20 Hz)
       10, // gravity
       1, // voxel size
+      // Hatches spec 3.2: a doorway holds a lintel but not a storey.
+      0.1, // hatch capacity factor
       0.85, // predictive highlight threshold
       2, // repair seconds per voxel
       1, // handling seconds at a rack or depot

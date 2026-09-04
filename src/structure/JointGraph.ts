@@ -3,6 +3,7 @@ import { IVec3 } from "../core/IVec3";
 import { Vec3 } from "../core/Vec3";
 import { MaterialProperties } from "../materials/MaterialProperties";
 import { MaterialTable } from "../materials/MaterialTable";
+import { BlockKind } from "../blueprint/BlockKind";
 import { BlockStructure } from "./BlockStructure";
 import { GROUND_BLOCK, Joint } from "./Joint";
 import { SupportSurface } from "./SupportSurface";
@@ -31,7 +32,8 @@ export class JointGraph {
     structure: BlockStructure,
     materials: MaterialTable,
     surface: SupportSurface,
-    voxelSize: number
+    voxelSize: number,
+    hatchCapacityFactor: number
   ): JointGraph {
     const joints: Joint[] = [];
     const incidence: number[][] = [];
@@ -53,7 +55,9 @@ export class JointGraph {
         if (neighbour < 0) {
           continue;
         }
-        const factor = structure.jointFactor(block, neighbour);
+        const factor =
+          structure.jointFactor(block, neighbour) *
+          JointGraph.openingFactor(structure, hatchCapacityFactor, block, neighbour);
         if (factor <= 0) {
           continue; // severed
         }
@@ -91,7 +95,9 @@ export class JointGraph {
       if (!surface.supportsBlockAt(position)) {
         continue;
       }
-      const factor = structure.jointFactor(GROUND_BLOCK, block);
+      const factor =
+        structure.jointFactor(GROUND_BLOCK, block) *
+        JointGraph.openingFactor(structure, hatchCapacityFactor, block, block);
       if (factor <= 0) {
         continue;
       }
@@ -161,6 +167,26 @@ export class JointGraph {
       (position.y + 0.5) * voxelSize,
       (position.z + 0.5) * voxelSize
     );
+  }
+
+  /**
+   * Hatches spec 3: a joint touching an opening keeps only a fraction of its capacity.
+   *
+   * The same "only as strong as its weaker side" argument `weaker` makes for materials, so
+   * either end being a hatch is enough and the two ends are passed as the same block for a
+   * support joint. Two hatches meeting apply the factor **once**: the opening is the
+   * weakness, and two openings against each other are not twice as weak as one.
+   */
+  private static openingFactor(
+    structure: BlockStructure,
+    hatchCapacityFactor: number,
+    blockLow: number,
+    blockHigh: number
+  ): number {
+    const opening =
+      structure.kindOf(blockLow) === BlockKind.Hatch ||
+      structure.kindOf(blockHigh) === BlockKind.Hatch;
+    return opening ? hatchCapacityFactor : 1;
   }
 
   /**

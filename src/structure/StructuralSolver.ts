@@ -52,7 +52,13 @@ export class StructuralSolver {
 
   /** Convenience: the graph the analysis needs, built with this solver's material table. */
   public buildJointGraph(structure: BlockStructure, surface: SupportSurface): JointGraph {
-    return JointGraph.build(structure, this.materials, surface, this.dials.voxelSize);
+    return JointGraph.build(
+      structure,
+      this.materials,
+      surface,
+      this.dials.voxelSize,
+      this.dials.hatchCapacityFactor
+    );
   }
 
   public analyse(structure: BlockStructure, joints: JointGraph, loads: LoadSet): StructuralReport {

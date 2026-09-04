@@ -17,6 +17,9 @@ What is here so far:
 - [`20260903-depth-view.md`](20260903-depth-view.md) — **superseded** by the isometric
   renderer spec. Kept for the peel rule it first argued and the alternatives it ruled out;
   not to be implemented against.
+- [`20260904-loss-conditions.md`](20260904-loss-conditions.md) — how a run ends. Removes the
+  Core block from P0 and replaces the win-condition dial in §5 of the P0 spec with a win and
+  two named losses, wrecked and unmanned.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

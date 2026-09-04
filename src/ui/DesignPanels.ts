@@ -274,8 +274,8 @@ export class DesignPanels {
       DesignPanels.row("round trip", Dom.seconds(readout.roundTripSeconds)) +
       DesignPanels.row("rounds per trip", rounds) +
       DesignPanels.row(
-        "crew route to hatch",
-        readout.hasHatchRoute ? "yes" : '<span class="bad">none</span>'
+        "crew route in",
+        readout.hasEntryRoute ? "yes" : '<span class="bad">none</span>'
       ) +
       DesignPanels.row("walk speed", editor.dialValues.crewWalkSpeed.toString() + " voxels/s") +
       "</table>"

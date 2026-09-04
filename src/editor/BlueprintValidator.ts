@@ -8,6 +8,7 @@ import { Blueprint } from "../blueprint/Blueprint";
 import { BudgetProvider } from "../blueprint/BudgetProvider";
 import { AStar } from "../path/AStar";
 import { Path } from "../path/Path";
+import { CrewEntry } from "../path/CrewEntry";
 import { WalkGraph } from "../path/WalkGraph";
 import { BlockStructure } from "../structure/BlockStructure";
 import { GravityLoadCase } from "../structure/LoadCase";
@@ -161,9 +162,6 @@ export class BlueprintValidator {
     if (blueprint.countOfKind(BlockKind.Depot) === 0) {
       violations.push(new Violation(ViolationKind.NoDepot, -1, "nothing to resupply from"));
     }
-    if (blueprint.countOfKind(BlockKind.Hatch) === 0) {
-      violations.push(new Violation(ViolationKind.NoHatch, -1, "crew cannot get in"));
-    }
   }
 
   /**
@@ -175,7 +173,8 @@ export class BlueprintValidator {
     const pathfinder = new AStar(graph);
     const weapon = this.weapons.get(WeaponClassId.Gun);
     const stations = structure.aliveOfKind(BlockKind.Station);
-    const hatchCells = this.accessCellsOfKind(structure, graph, BlockKind.Hatch);
+    // Crew-access spec 2: a way in is a gap in the ground floor, not a kind of block.
+    const entryCells = CrewEntry.cells(graph, structure.blueprint.bounds);
     const depots = structure.aliveOfKind(BlockKind.Depot);
 
     const readouts: StationReadout[] = [];
@@ -225,10 +224,15 @@ export class BlueprintValidator {
         continue;
       }
 
-      const hatchPath = hatchCells.length > 0 ? pathfinder.findPathToAny(crewCell, hatchCells) : null;
-      if (hatchPath === null) {
+      const entryPath =
+        entryCells.length > 0 ? pathfinder.findPathToAny(crewCell, entryCells) : null;
+      if (entryPath === null) {
         violations.push(
-          new Violation(ViolationKind.StationNoHatchPath, station, "hatch access is not traversable")
+          new Violation(
+            ViolationKind.StationNoEntryPath,
+            station,
+            entryCells.length === 0 ? "the ground floor has no opening" : "no route to a way in"
+          )
         );
       }
 
@@ -274,7 +278,7 @@ export class BlueprintValidator {
           arcFraction,
           centreClear,
           crewCell,
-          hatchPath,
+          entryPath,
           depotPath,
           nearestDepot,
           roundTrip,
@@ -283,25 +287,5 @@ export class BlueprintValidator {
       );
     }
     return readouts;
-  }
-
-  private accessCellsOfKind(
-    structure: BlockStructure,
-    graph: WalkGraph,
-    kind: BlockKind
-  ): IVec3[] {
-    const cells: IVec3[] = [];
-    const blocks = structure.aliveOfKind(kind);
-    for (let i = 0; i < blocks.length; i++) {
-      const position = structure.positionOf(blocks[i]);
-      if (graph.isStandable(position)) {
-        cells.push(position);
-      }
-      const adjacent = graph.accessCells(position);
-      for (let k = 0; k < adjacent.length; k++) {
-        cells.push(adjacent[k]);
-      }
-    }
-    return cells;
   }
 }

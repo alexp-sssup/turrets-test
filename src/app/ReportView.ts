@@ -95,8 +95,8 @@ export class ReportView {
       } else {
         line += ", NO DEPOT ROUTE (will fire its rack dry)";
       }
-      if (!station.hasHatchRoute) {
-        line += ", NO HATCH ROUTE";
+      if (!station.hasEntryRoute) {
+        line += ", NO ROUTE IN";
       }
       lines.push(line);
     }

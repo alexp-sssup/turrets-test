@@ -6,21 +6,24 @@ export enum ViolationKind {
   OverBudget = 0,
   NoStation = 1,
   NoDepot = 2,
-  NoHatch = 3,
   /** Blocks with no path to the pad. */
-  DisconnectedBlocks = 4,
+  DisconnectedBlocks = 3,
   /** The load factor is under 1: it comes apart under its own weight. */
-  StructurallyUnsound = 5,
+  StructurallyUnsound = 4,
   /** It falls over rather than coming apart. */
-  Tipping = 6,
+  Tipping = 5,
   /** The gun cannot see out. */
-  StationArcBlocked = 7,
+  StationArcBlocked = 6,
   /** Nowhere for the gunner to stand. */
-  StationNoCrewSpace = 8,
-  /** No traversable route from the station to any hatch. */
-  StationNoHatchPath = 9,
+  StationNoCrewSpace = 7,
+  /**
+   * Crew-access spec 2.3: no traversable route from the station to a way in. There is no
+   * violation for having no hatch (2.4) -- a single-storey turret needs none, and a station
+   * stranded upstairs is reported by this rule without one.
+   */
+  StationNoEntryPath = 8,
   /** No traversable route from the station to any depot: it will fire its rack dry. */
-  StationNoDepotPath = 10,
+  StationNoDepotPath = 9,
 }
 
 export function violationKindName(kind: ViolationKind): string {
@@ -28,13 +31,12 @@ export function violationKindName(kind: ViolationKind): string {
     "over budget",
     "no crew station",
     "no munition depot",
-    "no hatch",
     "disconnected blocks",
     "structurally unsound",
     "tips over",
     "station firing arc blocked",
     "station has nowhere for crew to stand",
-    "station has no route to a hatch",
+    "station has no route in",
     "station has no route to a depot",
   ];
   return names[kind as number];

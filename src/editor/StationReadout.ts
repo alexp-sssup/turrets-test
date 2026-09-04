@@ -18,7 +18,8 @@ export class StationReadout {
   public readonly arcCentreClear: boolean;
   /** Where the gunner stands, or null when there is nowhere. */
   public readonly crewCell: IVec3 | null;
-  public readonly hatchPath: Path | null;
+  /** Crew-access spec 2.3: the route to a way in, or null when there is none. */
+  public readonly entryPath: Path | null;
   public readonly depotPath: Path | null;
   /** Block index of the depot the station would actually be supplied from, or -1. */
   public readonly nearestDepot: number;
@@ -32,7 +33,7 @@ export class StationReadout {
     arcClearFraction: number,
     arcCentreClear: boolean,
     crewCell: IVec3 | null,
-    hatchPath: Path | null,
+    entryPath: Path | null,
     depotPath: Path | null,
     nearestDepot: number,
     roundTripSeconds: number,
@@ -43,7 +44,7 @@ export class StationReadout {
     this.arcClearFraction = arcClearFraction;
     this.arcCentreClear = arcCentreClear;
     this.crewCell = crewCell;
-    this.hatchPath = hatchPath;
+    this.entryPath = entryPath;
     this.depotPath = depotPath;
     this.nearestDepot = nearestDepot;
     this.roundTripSeconds = roundTripSeconds;
@@ -63,7 +64,7 @@ export class StationReadout {
     return this.depotPath !== null;
   }
 
-  public get hasHatchRoute(): boolean {
-    return this.hatchPath !== null;
+  public get hasEntryRoute(): boolean {
+    return this.entryPath !== null;
   }
 }

@@ -52,7 +52,7 @@ describe("BlueprintValidator: the standard turret", () => {
 
     // Somewhere to stand, a way out, and a depot to walk to.
     assert.notEqual(station.crewCell, null);
-    assert.equal(station.hasHatchRoute, true);
+    assert.equal(station.hasEntryRoute, true);
     assert.equal(station.hasDepotRoute, true);
     assert.ok(station.nearestDepot >= 0);
 
@@ -115,8 +115,52 @@ describe("BlueprintValidator: designs that should not pass", () => {
     const report = validator.validate(bare, pad, budget);
     assert.equal(report.has(ViolationKind.NoStation), true);
     assert.equal(report.has(ViolationKind.NoDepot), true);
-    assert.equal(report.has(ViolationKind.NoHatch), true);
+    // Crew-access spec 2.4: there is no "no hatch" rule to break any more.
     assert.equal(report.stationReadouts.length, 0);
+  });
+
+  /**
+   * Crew-access spec 2.4: `NoHatch` is deleted, and nothing replaces it, because nothing
+   * needs to. A station upstairs with no ladder simply cannot reach a way in, and 2.3
+   * reports that -- so the rule that used to be declared now falls out of the geometry.
+   */
+  it("reports a station stranded upstairs, and a hatch is what fixes it", () => {
+    function twoStorey(withHatch: boolean) {
+      const builder = new BlueprintBuilder();
+      builder.fillBox(new IVec3(0, 0, 0), new IVec3(2, 0, 2), MaterialId.Stone, BlockKind.Structural, Direction.PosZ);
+      // Ground floor: a ring with a doorway at (1, 1, 0), and a room behind it.
+      for (let x = 0; x <= 2; x++) {
+        for (let z = 0; z <= 2; z++) {
+          const room = x === 1 && z === 1;
+          const doorway = x === 1 && z === 0;
+          if (!room && !doorway) {
+            builder.place(new IVec3(x, 1, z), MaterialId.Wood, BlockKind.Structural, Direction.PosZ);
+          }
+          // The deck over it, with or without a hatch through the middle.
+          const hatch = withHatch && room;
+          builder.place(
+            new IVec3(x, 2, z),
+            MaterialId.Wood,
+            hatch ? BlockKind.Hatch : BlockKind.Structural,
+            Direction.PosZ
+          );
+        }
+      }
+      builder.place(new IVec3(1, 3, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
+      builder.place(new IVec3(1, 1, 2), MaterialId.Wood, BlockKind.Depot, Direction.PosZ);
+      return validator.validate(builder.build(withHatch ? "laddered" : "stranded"), pad, budget);
+    }
+
+    assert.equal(
+      twoStorey(false).has(ViolationKind.StationNoEntryPath),
+      true,
+      "no ladder down to the ground floor"
+    );
+    assert.equal(
+      twoStorey(true).has(ViolationKind.StationNoEntryPath),
+      false,
+      "a hatch through the deck is the whole fix"
+    );
   });
 
   // Loss-conditions spec 2: neither "no core block" nor "more than one core block" is a

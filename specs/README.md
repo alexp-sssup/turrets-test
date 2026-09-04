@@ -35,6 +35,9 @@ What is here so far:
 - [`20260904-standable-ground.md`](20260904-standable-ground.md) — the pad and a one-cell
   apron are a floor crew can stand on. Closes the edge the document above left open, and
   narrows where corridor-severing bites.
+- [`20260904-pointing-at-blocks.md`](20260904-pointing-at-blocks.md) — inspect and the
+  eraser address the block under the pointer. Restores §5.2 of the isometric renderer spec
+  on the Design screen and carves the eraser out of its §5.3; placement stays plane-locked.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

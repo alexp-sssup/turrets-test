@@ -16,6 +16,7 @@ import { CrewRole } from "../../src/crew/CrewMember";
 import { CrewPool } from "../../src/crew/CrewPool";
 import { LogisticsSystem, TripPhase } from "../../src/crew/LogisticsSystem";
 import { RepairSystem } from "../../src/crew/RepairSystem";
+import { PadSurface } from "../../src/structure/SupportSurface";
 
 const materials = MaterialTable.defaults();
 const ammo = AmmoTable.defaults(materials);
@@ -211,10 +212,13 @@ describe("RepairSystem", () => {
   });
 });
 
+/** The pad the logistics fixtures stand on (standable-ground spec 2). */
+const LOGISTICS_PAD = new PadSurface(0, 0, 4, 0, 6);
+
 describe("LogisticsSystem", () => {
   function setUp() {
     const structure = new BlockStructure(SampleBlueprints.standardTurret());
-    const logistics = new LogisticsSystem(ammo, dials);
+    const logistics = new LogisticsSystem(ammo, dials, LOGISTICS_PAD);
     logistics.configure(structure, AmmoLoadId.SolidShot);
     const crew = new CrewPool(dials.crewPool);
     const stations = logistics.stationBlocks();
@@ -341,14 +345,18 @@ describe("LogisticsSystem", () => {
     // A straight corridor rather than the sample turret, because the sample turret's walls
     // give crew a roof to walk over -- which is itself the right behaviour, and exactly why
     // this has to be tested on geometry where the corridor really is the only route.
+    //
+    // And a corridor one storey up, for the same reason again: standable-ground spec 3
+    // makes a hole in a floor laid on the pad a doorway rather than a cut, because crew
+    // step down onto the ground and back up. Severing bites above the ground floor.
     const builder = new BlueprintBuilder();
     for (let z = 0; z <= 6; z++) {
-      builder.place(new IVec3(0, 0, z), MaterialId.Stone, BlockKind.Structural, Direction.PosZ);
+      builder.place(new IVec3(0, 2, z), MaterialId.Stone, BlockKind.Structural, Direction.PosZ);
     }
-    builder.place(new IVec3(0, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
-    builder.place(new IVec3(0, 1, 6), MaterialId.Wood, BlockKind.Depot, Direction.PosZ);
+    builder.place(new IVec3(0, 3, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
+    builder.place(new IVec3(0, 3, 6), MaterialId.Wood, BlockKind.Depot, Direction.PosZ);
     const structure = new BlockStructure(builder.build("corridor"));
-    const logistics = new LogisticsSystem(ammo, dials);
+    const logistics = new LogisticsSystem(ammo, dials, LOGISTICS_PAD);
     logistics.configure(structure, AmmoLoadId.SolidShot);
     const crew = new CrewPool(dials.crewPool);
     const station = logistics.stationBlocks()[0];
@@ -361,7 +369,7 @@ describe("LogisticsSystem", () => {
     assert.equal((supply as { rack: AmmoStore }).rack.countOf(AmmoLoadId.SolidShot), 3);
 
     // Cut the corridor halfway along.
-    structure.destroy(structure.indexAt(new IVec3(0, 0, 3)));
+    structure.destroy(structure.indexAt(new IVec3(0, 2, 3)));
     const step = logistics.update(structure, crew, 0.5);
     assert.deepEqual(Array.from(step.starvedStations), [station]);
     assert.equal((supply as { starved: boolean }).starved, true);

@@ -7,7 +7,11 @@ import { BlockKind } from "../../src/blueprint/BlockKind";
 import { BlueprintBuilder } from "../../src/blueprint/BlueprintBuilder";
 import { BlockStructure } from "../../src/structure/BlockStructure";
 import { CrewEntry } from "../../src/path/CrewEntry";
+import { PadSurface } from "../../src/structure/SupportSurface";
 import { WalkGraph } from "../../src/path/WalkGraph";
+
+/** The 3x3 pad these boxes are built on. */
+const PAD = new PadSurface(0, 0, 2, 0, 2);
 
 /**
  * A 3x3 slab at y=0 with a ring of wall around its edge at y=1, leaving one open cell in
@@ -42,7 +46,7 @@ function box(doorKind: BlockKind | null): BlockStructure {
 }
 
 function entriesOf(structure: BlockStructure): IVec3[] {
-  return CrewEntry.cells(WalkGraph.build(structure), structure.blueprint.bounds);
+  return CrewEntry.cells(WalkGraph.build(structure, PAD), structure.blueprint.bounds);
 }
 
 function reaches(structure: BlockStructure, cell: IVec3): boolean {
@@ -86,6 +90,37 @@ describe("CrewEntry (crew-access spec 2)", () => {
     for (let i = 0; i < entries.length; i++) {
       assert.equal(entries[i].y, 1, "every way in is on the storey above the slab");
     }
+  });
+
+  /**
+   * Standable-ground spec 1 and 4: the case that document exists for. A ring of walls with
+   * nothing inside it used to have no standable cell on its lowest storey, so its ground
+   * floor came out as the top of its own walls and the room was unreachable.
+   */
+  it("lets crew into a floorless ring, now that the pad is a floor", () => {
+    const builder = new BlueprintBuilder();
+    for (let x = 0; x <= 2; x++) {
+      for (let z = 0; z <= 2; z++) {
+        const room = x === 1 && z === 1;
+        const doorway = x === 1 && z === 0;
+        if (!room && !doorway) {
+          builder.place(new IVec3(x, 0, z), MaterialId.Wood, BlockKind.Structural, Direction.PosZ);
+        }
+      }
+    }
+    const structure = new BlockStructure(builder.build("floorless"));
+    assert.equal(reaches(structure, new IVec3(1, 0, 1)), true, "the room, at true ground level");
+  });
+
+  /**
+   * Standable-ground spec 2.2: the ground is the pad and one cell of apron, and stops
+   * there. Beyond it is the lane, which is not somewhere crew go.
+   */
+  it("stops the standable ground one cell beyond the pad", () => {
+    const graph = WalkGraph.build(box(null), PAD);
+    assert.equal(graph.isStandable(new IVec3(3, 0, 1)), true, "the apron");
+    assert.equal(graph.isStandable(new IVec3(-1, 0, 1)), true, "and on the other side");
+    assert.equal(graph.isStandable(new IVec3(4, 0, 1)), false, "two cells out is the lane");
   });
 
   /**

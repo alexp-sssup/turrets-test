@@ -1,5 +1,6 @@
 import { Direction, Directions } from "../core/Direction";
 import { GridBounds } from "../core/GridBounds";
+import { SupportSurface } from "../structure/SupportSurface";
 import { IVec3 } from "../core/IVec3";
 import { BlockKind } from "../blueprint/BlockKind";
 import { BlockStructure } from "../structure/BlockStructure";
@@ -12,9 +13,10 @@ import { BlockStructure } from "../structure/BlockStructure";
  *
  * * A cell is **passable** when it holds no live block, or holds a hatch. Hatches are the
  *   only block kind crew move through, which is what gives them a job (spec 4.2).
- * * A cell is **standable** when it is passable and the cell below holds a live block. So
- *   crew walk on top of the structure and along its interior floors, and a corridor that
- *   loses its floor stops being a corridor.
+ * * A cell is **standable** when it is passable and either the cell below holds a live
+ *   block or the cell is on the ground plane (standable-ground spec 2). So crew walk on top
+ *   of the structure, along its interior floors, and across the ground around it -- and a
+ *   corridor that loses its floor stops being a corridor.
  * * Horizontal moves may step up or down by one. Vertical moves need a hatch at one end,
  *   so a hatch column is a ladder.
  *
@@ -25,11 +27,13 @@ import { BlockStructure } from "../structure/BlockStructure";
 export class WalkGraph {
   private readonly structure: BlockStructure;
   private readonly boundsValue: GridBounds;
+  private readonly surface: SupportSurface;
   private readonly version: number;
 
-  private constructor(structure: BlockStructure, bounds: GridBounds) {
+  private constructor(structure: BlockStructure, bounds: GridBounds, surface: SupportSurface) {
     this.structure = structure;
     this.boundsValue = bounds;
+    this.surface = surface;
     this.version = structure.version;
   }
 
@@ -37,13 +41,24 @@ export class WalkGraph {
    * Builds a graph covering the structure plus one voxel of margin, so crew can stand on
    * top of it and walk around its outside.
    */
-  public static build(structure: BlockStructure): WalkGraph {
+  public static build(structure: BlockStructure, surface: SupportSurface): WalkGraph {
     const inner = structure.blueprint.bounds;
     const bounds = new GridBounds(
       new IVec3(inner.min.x - 1, inner.min.y, inner.min.z - 1),
       new IVec3(inner.size.x + 2, inner.size.y + 2, inner.size.z + 2)
     );
-    return new WalkGraph(structure, bounds);
+    return new WalkGraph(structure, bounds, surface);
+  }
+
+  /**
+   * Standable-ground spec 2: the pad has a floor, so a cell on it needs no block under it.
+   *
+   * The surface's apron is what makes this reach around a design that fills its pad --
+   * every shipped one does -- and what keeps it from reaching out under an arm that
+   * overhangs the lane, where no gunner stands.
+   */
+  public isGround(cell: IVec3): boolean {
+    return this.surface.walkableAt(cell);
   }
 
   public get bounds(): GridBounds {
@@ -91,7 +106,7 @@ export class WalkGraph {
     if (!this.isPassable(cell)) {
       return false;
     }
-    return this.hasFloor(cell) || this.isHatch(cell);
+    return this.hasFloor(cell) || this.isHatch(cell) || this.isGround(cell);
   }
 
   public isHatch(cell: IVec3): boolean {

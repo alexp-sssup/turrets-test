@@ -102,7 +102,7 @@ export class BlueprintValidator {
       );
     }
 
-    const readouts = this.buildStationReadouts(structure, violations);
+    const readouts = this.buildStationReadouts(structure, surface, violations);
     return new ValidationReport(violations, readouts, structural, cost, allowance);
   }
 
@@ -127,7 +127,7 @@ export class BlueprintValidator {
     const floating = SupportAnalysis.floatingBlocks(structure, joints);
     this.checkConnectivity(floating, violations);
 
-    const readouts = this.buildStationReadouts(structure, violations);
+    const readouts = this.buildStationReadouts(structure, surface, violations);
     return new GeometryReport(violations, readouts, cost, allowance, floating);
   }
 
@@ -168,8 +168,12 @@ export class BlueprintValidator {
    * Per-station geometry and logistics. Runs the real pathfinder against the real walk
    * graph, so the round-trip time shown here is the one the runner will actually pay.
    */
-  private buildStationReadouts(structure: BlockStructure, violations: Violation[]): StationReadout[] {
-    const graph = WalkGraph.build(structure);
+  private buildStationReadouts(
+    structure: BlockStructure,
+    surface: SupportSurface,
+    violations: Violation[]
+  ): StationReadout[] {
+    const graph = WalkGraph.build(structure, surface);
     const pathfinder = new AStar(graph);
     const weapon = this.weapons.get(WeaponClassId.Gun);
     const stations = structure.aliveOfKind(BlockKind.Station);

@@ -149,7 +149,7 @@ export class RunLoop {
     this.collapse = CollapseResolver.withDefaults(this.solver, materials, dials);
     this.fireValue = FireSimulation.withDefaults(materials);
     this.damage = DamageSystem.withDefaults(materials, ammo, this.fireValue, dials);
-    this.logisticsValue = new LogisticsSystem(ammo, dials);
+    this.logisticsValue = new LogisticsSystem(ammo, dials, arena.pad);
     this.repair = new RepairSystem(materials, dials);
     this.crewValue = new CrewPool(dials.crewPool);
     this.targeting = new TargetingSystem();

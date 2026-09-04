@@ -7,6 +7,14 @@ import { IVec3 } from "../core/IVec3";
 export interface SupportSurface {
   /** True when a block at this position rests on solid ground. */
   supportsBlockAt(position: IVec3): boolean;
+  /**
+   * True when crew can stand on the ground here (standable-ground spec 2).
+   *
+   * Wider than `supportsBlockAt` by one cell, and narrower than the world: the apron is
+   * what lets crew stand outside the wall of a design that fills its pad, and the bound is
+   * what keeps them off the lane.
+   */
+  walkableAt(position: IVec3): boolean;
 }
 
 /** Spec 2: "places it on a marked pad". A rectangle at one height. */
@@ -32,6 +40,17 @@ export class PadSurface implements SupportSurface {
       position.x <= this.maxX &&
       position.z >= this.minZ &&
       position.z <= this.maxZ
+    );
+  }
+
+  /** The pad plus a one-cell apron (standable-ground spec 2.2). */
+  public walkableAt(position: IVec3): boolean {
+    return (
+      position.y === this.level &&
+      position.x >= this.minX - 1 &&
+      position.x <= this.maxX + 1 &&
+      position.z >= this.minZ - 1 &&
+      position.z <= this.maxZ + 1
     );
   }
 

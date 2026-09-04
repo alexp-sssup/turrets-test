@@ -3,6 +3,7 @@ import { AmmoLoadId, AmmoTable } from "../materials/AmmoTable";
 import { BlockKind } from "../blueprint/BlockKind";
 import { AStar } from "../path/AStar";
 import { Path } from "../path/Path";
+import { SupportSurface } from "../structure/SupportSurface";
 import { WalkGraph } from "../path/WalkGraph";
 import { BlockStructure } from "../structure/BlockStructure";
 import { AmmoStore } from "./AmmoStore";
@@ -121,6 +122,7 @@ export class LogisticsStep {
 export class LogisticsSystem {
   private readonly ammo: AmmoTable;
   private readonly dials: Dials;
+  private readonly surface: SupportSurface;
   private readonly supplies: Map<number, StationSupply>;
   private readonly depots: Map<number, AmmoStore>;
   private trips: SupplyTrip[];
@@ -128,9 +130,15 @@ export class LogisticsSystem {
   private pathfinder: AStar | null;
   private graphVersion: number;
 
-  public constructor(ammo: AmmoTable, dials: Dials) {
+  /**
+   * The surface is the pad: standable-ground spec 2 lets crew walk on it and on its apron,
+   * so a runner's route may leave the turret through one opening and come back in through
+   * another.
+   */
+  public constructor(ammo: AmmoTable, dials: Dials, surface: SupportSurface) {
     this.ammo = ammo;
     this.dials = dials;
+    this.surface = surface;
     this.supplies = new Map<number, StationSupply>();
     this.depots = new Map<number, AmmoStore>();
     this.trips = [];
@@ -455,7 +463,7 @@ export class LogisticsSystem {
 
   private refreshGraph(structure: BlockStructure): void {
     if (this.graph === null || this.graphVersion !== structure.version) {
-      this.graph = WalkGraph.build(structure);
+      this.graph = WalkGraph.build(structure, this.surface);
       this.pathfinder = new AStar(this.graph);
       this.graphVersion = structure.version;
     }

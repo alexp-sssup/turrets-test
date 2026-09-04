@@ -52,11 +52,11 @@ export class FieldControls {
    * row here and a button in the dev chip, and the caption follows from the row.
    */
   public static readonly HINTS: readonly InputHint[] = [
-    // Touch-gestures spec 5: on a finger the tap is the only verb that edits, and a drag
-    // is a pan. The `fine` column is untouched -- a mouse keeps the rectangle (2.1).
-    new InputHint("place", "", "drag to place", "tap to place"),
+    // Mouse-gestures spec 4: one gesture model on both pointers. Placement is single-cell
+    // and a drag pans, so neither column promises a rectangle any more.
+    new InputHint("place", "", "click to place", "tap to place"),
     new InputHint("inspect", "alt-click", "alt-click to inspect", "long-press to inspect, drag to sweep"),
-    new InputHint("pan", "", "shift-drag or right-drag to pan", "drag to pan, or two fingers"),
+    new InputHint("pan", "", "drag to pan, or shift-drag", "drag to pan, or two fingers"),
     new InputHint("zoom", "", "wheel to zoom", "pinch to zoom"),
     new InputHint("fit", "", "", "double-tap to fit"),
     new InputHint("overlay", "1–5", "1–5 overlays", "overlay row below"),

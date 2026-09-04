@@ -185,33 +185,23 @@ export class EditorModel {
   // ---------------------------------------------------------------- editing
 
   /**
-   * Places or erases a rectangle. A single cell is a rectangle of one, so click and
-   * click-drag are the same code path and undo treats them the same way.
+   * Places or erases one cell, which is the whole of placement: mouse-gestures spec 2.1
+   * makes it single-cell on every pointer, so a click and a tap are the same code path and
+   * undo treats them the same way.
+   *
+   * Returns false when the edit would change nothing -- erasing an empty cell -- so that
+   * nothing is pushed onto the undo stack for it.
    */
-  public applyRect(from: IVec3, to: IVec3, nowMs: number): boolean {
+  public placeAt(cell: IVec3, nowMs: number): boolean {
     const entry = this.paletteValue;
-    const minY = from.y < to.y ? from.y : to.y;
-    const maxY = from.y < to.y ? to.y : from.y;
-    const minZ = from.z < to.z ? from.z : to.z;
-    const maxZ = from.z < to.z ? to.z : from.z;
     const snapshot = this.snapshot();
-    let changed = false;
-    for (let y = minY; y <= maxY; y++) {
-      for (let z = minZ; z <= maxZ; z++) {
-        const cell = new IVec3(from.x, y, z);
-        if (entry.erases) {
-          if (this.builder.has(cell)) {
-            this.builder.remove(cell);
-            changed = true;
-          }
-          continue;
-        }
-        this.builder.place(cell, entry.material, entry.kind, EditorModel.facingFor(entry.kind));
-        changed = true;
+    if (entry.erases) {
+      if (!this.builder.has(cell)) {
+        return false;
       }
-    }
-    if (!changed) {
-      return false;
+      this.builder.remove(cell);
+    } else {
+      this.builder.place(cell, entry.material, entry.kind, EditorModel.facingFor(entry.kind));
     }
     this.pushHistory(snapshot);
     this.rebuild(nowMs);

@@ -39,6 +39,7 @@ import { EditorModel } from "./EditorModel";
 import { LocalSessionStore } from "./LocalSessionStore";
 import { FieldControls } from "./FieldControls";
 import { GestureIntent, GestureKind } from "./GestureIntent";
+import { MousePress } from "./MousePress";
 import { GesturePhase, GestureRecognizer } from "./GestureRecognizer";
 import { LayoutMode, layoutModeName, pointerKindName } from "./LayoutMode";
 import { PanelGroup, PanelSheet } from "./PanelSheet";
@@ -105,12 +106,11 @@ export class App implements SimTarget, FitTarget {
   private lastShellMs: number;
   private lastFrameMs: number;
   /**
-   * The corners of a mouse rectangle in progress, and only a mouse's: touch-gestures spec
-   * 2.1 makes the rectangle a mouse verb, so nothing on the recognizer path writes these.
+   * The mouse press in flight. Mouse-gestures spec 2 gives the mouse the same two verbs a
+   * finger has, so this is all the state a mouse gesture needs.
    */
-  private dragFrom: IVec3 | null;
-  private dragTo: IVec3 | null;
-  private panning: boolean;
+  private readonly press: MousePress;
+  /** Where the touch pan was last seen. The recognizer owns the finger's slop, not this. */
   private panFromX: number;
   private panFromY: number;
   private predictRequestedAtMs: number;
@@ -201,9 +201,7 @@ export class App implements SimTarget, FitTarget {
     this.lastPanelMs = 0;
     this.lastShellMs = 0;
     this.lastFrameMs = 0;
-    this.dragFrom = null;
-    this.dragTo = null;
-    this.panning = false;
+    this.press = new MousePress();
     this.panFromX = 0;
     this.panFromY = 0;
     this.lastZoomRung = -1;
@@ -1284,8 +1282,13 @@ export class App implements SimTarget, FitTarget {
       this.pumpGestures();
     });
     // 6.2: when the browser takes the gesture over -- a back-swipe, a notification, a call
-    // -- the placement is discarded rather than committed.
+    // -- the gesture is discarded rather than committed. Both paths, because a mouse press
+    // can be cancelled too and a cancelled press must not come back as a click.
     this.canvas.addEventListener("pointercancel", (event: PointerEvent): void => {
+      if (event.pointerType === "mouse") {
+        this.press.cancel();
+        return;
+      }
       this.recognizer.cancel(event.pointerId, App.now());
       this.pumpGestures();
     });
@@ -1343,12 +1346,11 @@ export class App implements SimTarget, FitTarget {
   private applyGesture(intent: GestureIntent): void {
     const kind = intent.kind;
     if (kind === GestureKind.Cancel) {
-      // 6.2's cancel rules, with less left to cancel: touch-gestures spec 2.4. A touch drag
-      // no longer places, so what a pinch or a `pointercancel` discards here is a mouse
-      // rectangle caught mid-drag by a cancelled pointer. Kept, because a silent
-      // uncommanded edit is still worse than a lost gesture.
-      this.dragFrom = null;
-      this.dragTo = null;
+      // 6.2's cancel rules, with nothing left to cancel: no gesture on either pointer
+      // places while it is still in flight (mouse-gestures spec 2.1), so a pinch or a
+      // `pointercancel` has only the pan it interrupted to discard, and a pan is applied a
+      // frame at a time and needs no discarding.
+      this.press.cancel();
       return;
     }
     if (kind === GestureKind.Zoom) {
@@ -1381,8 +1383,6 @@ export class App implements SimTarget, FitTarget {
       }
       // Inspect, place nothing (6.2). On a coarse pointer the selection is what predict
       // reads, so a sweep is hover, performed deliberately (6.3).
-      this.dragFrom = null;
-      this.dragTo = null;
       this.dispatcher.dispatchView(ViewCommand.select(this.inspectCellAt(intent.x, intent.y)));
       this.panelDirty = true;
       return;
@@ -1392,19 +1392,34 @@ export class App implements SimTarget, FitTarget {
 
   private onTap(clientX: number, clientY: number): void {
     this.gestureTaps++;
-    this.lastTapPlaced = false;
+    this.lastTapPlaced = this.onClick(clientX, clientY, false);
+  }
+
+  /**
+   * The click action, shared by a mouse click and a touch tap.
+   *
+   * Mouse-gestures spec 2.1 makes placement single-cell on every pointer, so the two are the
+   * same verb and there is one body for them. Returns whether it placed, which is what the
+   * double-tap of 6.2 takes back before it frames.
+   *
+   * `inspectOnly` is 2.6's alt-click, which the finger has no way to ask for.
+   */
+  private onClick(clientX: number, clientY: number, inspectOnly: boolean): boolean {
     const cell = this.cellAtClient(clientX, clientY);
     if (this.screen === Screen.Design) {
-      if (this.editor.applyRect(cell, cell, App.now())) {
+      // Without a modifier a click places, because placement is the verb the editor is for;
+      // with one it inspects, or there would be no way to read a cell's joints without
+      // changing the design first.
+      let placed = false;
+      if (!inspectOnly && this.editor.placeAt(cell, App.now())) {
         this.refreshDesignFrame();
-        this.lastTapPlaced = true;
+        placed = true;
       }
       this.dispatcher.dispatchView(ViewCommand.select(cell));
       this.panelDirty = true;
-      return;
+      return placed;
     }
-    // 6.2: focus-fire the attacker under the tap, else inspect the cell. The same `focus`
-    // a click already is.
+    // 6.2: focus-fire the attacker under the click, else inspect the cell.
     const target = this.screen === Screen.Run ? this.attackerAt(clientX, clientY) : -1;
     if (target >= 0) {
       this.dispatcher.dispatchSim(SimCommand.focus(target));
@@ -1412,15 +1427,16 @@ export class App implements SimTarget, FitTarget {
       this.dispatcher.dispatchView(ViewCommand.select(this.inspectCellAt(clientX, clientY)));
     }
     this.panelDirty = true;
+    return false;
   }
 
   /**
    * A one-finger drag pans, on every screen (touch-gestures spec 2).
    *
    * This routine only ever sees a finger or a stylus: a mouse goes to `onCanvasDown` and
-   * never reaches the recognizer (mobile UI spec 3.2), which is why the rectangle can stay
-   * a mouse verb while this one is a pan. Nothing here writes to the blueprint, so on touch
-   * the tap is the only gesture that edits, one cell at a time (2.1).
+   * never reaches the recognizer (mobile UI spec 3.2). The two paths do the same two things
+   * now (mouse-gestures spec 2) and stay separate because the finger's slop, long-press and
+   * pinch are the recognizer's to own and a mouse has none of them.
    */
   private onDrag(intent: GestureIntent): void {
     if (intent.kind === GestureKind.DragStart) {
@@ -1477,73 +1493,49 @@ export class App implements SimTarget, FitTarget {
     return picked === null ? this.cellAtClient(clientX, clientY) : picked;
   }
 
+  /**
+   * A button went down. Nothing happens yet.
+   *
+   * Mouse-gestures spec 2.3 and 2.4: what a press means is not known until it either moves
+   * past the slop or comes up without having done so, so the action waits for the answer.
+   * Acting here instead is how the old rectangle worked, and it is why a pan used to start
+   * by placing a block.
+   */
   private onCanvasDown(event: PointerEvent): void {
-    const cell = this.renderer.cellAt(this.frame(), this.view, event.clientX, event.clientY);
-    if (event.button === 1 || event.button === 2 || event.shiftKey) {
-      this.panning = true;
-      this.panFromX = event.clientX;
-      this.panFromY = event.clientY;
-      return;
-    }
-    if (this.screen === Screen.Design) {
-      // Alt- or ctrl-click inspects without editing. A plain click places, because
-      // placement is the verb the editor is for; without a modifier there would be no way
-      // to read a cell's joints without changing the design first.
-      if (event.altKey || event.ctrlKey || event.metaKey) {
-        this.dispatcher.dispatchView(ViewCommand.select(cell));
-        this.panelDirty = true;
-        return;
-      }
-      this.dragFrom = cell;
-      this.dragTo = cell;
-      return;
-    }
-    if (this.screen === Screen.Run) {
-      const target = this.attackerAt(event.clientX, event.clientY);
-      if (target >= 0) {
-        this.dispatcher.dispatchSim(SimCommand.focus(target));
-        this.panelDirty = true;
-        return;
-      }
-    }
-    this.dispatcher.dispatchView(
-      ViewCommand.select(this.inspectCellAt(event.clientX, event.clientY))
-    );
-    this.panelDirty = true;
+    // 2.5: a modifier press is a drag from the moment it begins and never places.
+    const modifier = event.button === 1 || event.button === 2 || event.shiftKey;
+    this.press.begin(event.clientX, event.clientY, modifier);
   }
 
   private onCanvasMove(event: PointerEvent): void {
-    if (this.panning) {
-      this.dispatcher.dispatchView(
-        ViewCommand.pan(event.clientX - this.panFromX, event.clientY - this.panFromY)
-      );
-      this.panFromX = event.clientX;
-      this.panFromY = event.clientY;
-      return;
+    if (this.press.active) {
+      this.press.move(event.clientX, event.clientY);
+      if (this.press.dragging) {
+        // 2.2: a drag pans, on every pointer and every screen.
+        this.dispatcher.dispatchView(ViewCommand.pan(this.press.deltaX, this.press.deltaY));
+        return;
+      }
     }
+    // Hover, which only a mouse has (6.3). It keeps updating under a press that has not yet
+    // become a drag: the tester is still pointing at the cell they pressed on.
     this.dispatcher.dispatchView(
       ViewCommand.inspect(this.inspectCellAt(event.clientX, event.clientY))
     );
-    if (this.dragFrom !== null) {
-      this.dragTo = this.cellAtClient(event.clientX, event.clientY);
-    }
   }
 
   private onCanvasUp(event: PointerEvent): void {
-    this.panning = false;
-    const from = this.dragFrom;
-    const to = this.dragTo;
-    this.dragFrom = null;
-    this.dragTo = null;
-    if (from === null || to === null || this.screen !== Screen.Design) {
+    // Where the button went down, not where it came up. They are within the slop of each
+    // other by 2.3, and the press began on the canvas where this listener is on the window:
+    // a click released off the edge would otherwise place a cell the tester never saw.
+    const x = this.press.startX;
+    const y = this.press.startY;
+    if (!this.press.end()) {
+      // 2.4: the press became a pan, so no click action runs at all -- not a placement, and
+      // not the focus-fire that would otherwise write a view gesture into the command log.
       return;
     }
-    void event;
-    if (this.editor.applyRect(from, to, App.now())) {
-      this.refreshDesignFrame();
-      this.panelDirty = true;
-    }
-    this.dispatcher.dispatchView(ViewCommand.select(to));
+    // 2.6: alt-, ctrl- or meta-click inspects without editing, and is a click like any other.
+    this.onClick(x, y, event.altKey || event.ctrlKey || event.metaKey);
   }
 
   /**

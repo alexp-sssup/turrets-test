@@ -30,7 +30,7 @@ describe("FieldControls", () => {
     const fine = FieldControls.caption(false);
     const coarse = FieldControls.caption(true);
 
-    assert.ok(fine.indexOf("drag to place") >= 0);
+    assert.ok(fine.indexOf("click to place") >= 0);
     assert.ok(fine.indexOf("wheel to zoom") >= 0);
     // The key it names is drawn as a key cap, and only because the table has that binding.
     assert.ok(fine.indexOf("<kbd>[ ]</kbd> cross-section") >= 0);
@@ -66,12 +66,20 @@ describe("FieldControls", () => {
   });
 
   /**
-   * Touch-gestures spec 6: the rectangle stays a mouse verb, so the fine column keeps both
-   * the phrase and the pan binding it was already generated from.
+   * Mouse-gestures spec 2.1 and 4: the rectangle is gone from the mouse too, so neither
+   * column may promise one and both say the same two things in their own words.
    */
-  it("leaves the fine pointer's caption alone (touch-gestures spec 6)", () => {
-    assert.equal(FieldControls.hintFor("place", false), "drag to place");
-    assert.equal(FieldControls.hintFor("pan", false), "shift-drag or right-drag to pan");
+  it("promises a click and no rectangle on a fine pointer (mouse-gestures spec 4)", () => {
+    assert.equal(FieldControls.hintFor("place", false), "click to place");
+    assert.equal(FieldControls.hintFor("pan", false), "drag to pan, or shift-drag");
+
+    const fine = FieldControls.caption(false);
+    assert.equal(fine.indexOf("rectangle"), -1, "no pointer places one (2.1)");
+    assert.ok(fine.indexOf("drag to pan") >= 0);
+    // 2.6: alt-click still inspects. The caption draws the binding as a key cap, which is
+    // 6.4's rule and the reason this asserts the phrase through the table.
+    assert.equal(FieldControls.hintFor("inspect", false), "alt-click to inspect");
+    assert.ok(fine.indexOf("<kbd>alt-click</kbd> to inspect") >= 0);
   });
 
   /**

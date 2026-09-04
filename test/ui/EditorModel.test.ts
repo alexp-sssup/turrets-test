@@ -34,8 +34,11 @@ describe("EditorModel", () => {
     const blocks = model.blockCount;
 
     model.selectPalette("stone");
-    // A three-cell column in the current cross-section.
-    assert.equal(model.applyRect(new IVec3(2, 2, 1), new IVec3(2, 4, 1), 0), true);
+    // A three-cell column, one click per cell: mouse-gestures spec 2.1 makes placement
+    // single-cell on every pointer, so three cells is three edits.
+    assert.equal(model.placeAt(new IVec3(2, 2, 1), 0), true);
+    assert.equal(model.placeAt(new IVec3(2, 3, 1), 0), true);
+    assert.equal(model.placeAt(new IVec3(2, 4, 1), 0), true);
 
     assert.equal(model.blockCount, blocks + 3);
     assert.equal(model.cost, before + 3 * materials.get(MaterialId.Stone).costPerVoxel);
@@ -44,49 +47,55 @@ describe("EditorModel", () => {
     assert.equal(model.awaitingSolve, true);
   });
 
-  it("erases, and treats a rectangle over empty cells as no edit at all", () => {
+  it("erases, and treats erasing an empty cell as no edit at all", () => {
     const model = editor();
     const blocks = model.blockCount;
     model.selectPalette("erase");
 
-    assert.equal(model.applyRect(new IVec3(2, 1, 0), new IVec3(2, 1, 0), 0), true);
+    assert.equal(model.placeAt(new IVec3(2, 1, 0), 0), true);
     assert.equal(model.blockCount, blocks - 1);
 
     // Nothing there any more: no change, and nothing pushed onto the undo stack.
-    assert.equal(model.applyRect(new IVec3(2, 1, 0), new IVec3(2, 1, 0), 0), false);
+    assert.equal(model.placeAt(new IVec3(2, 1, 0), 0), false);
     assert.equal(model.blockCount, blocks - 1);
+    assert.equal(model.canUndo, true, "the first erase is still undoable, and only it");
+    model.undo(0);
+    assert.equal(model.canUndo, false);
   });
 
-  it("undoes and redoes without limit, one rectangle at a time", () => {
+  // Mouse-gestures spec 2.1: an edit is one cell, so an undo is one cell. Unlimited undo is
+  // what makes a wrong single-cell click cost nothing (5), which is the whole safety net
+  // now that no gesture places more than one voxel.
+  it("undoes and redoes without limit, one placement at a time", () => {
     const model = editor();
     const original = model.blockCount;
     model.selectPalette("wood");
-    model.applyRect(new IVec3(2, 2, 1), new IVec3(2, 2, 3), 0);
-    model.applyRect(new IVec3(2, 3, 1), new IVec3(2, 3, 3), 0);
-    assert.equal(model.blockCount, original + 6);
+    model.placeAt(new IVec3(2, 2, 1), 0);
+    model.placeAt(new IVec3(2, 2, 2), 0);
+    assert.equal(model.blockCount, original + 2);
 
     assert.equal(model.undo(0), true);
-    assert.equal(model.blockCount, original + 3);
+    assert.equal(model.blockCount, original + 1);
     assert.equal(model.undo(0), true);
     assert.equal(model.blockCount, original);
     assert.equal(model.undo(0), false, "nothing left to undo");
 
     assert.equal(model.redo(0), true);
-    assert.equal(model.blockCount, original + 3);
+    assert.equal(model.blockCount, original + 1);
     assert.equal(model.redo(0), true);
-    assert.equal(model.blockCount, original + 6);
+    assert.equal(model.blockCount, original + 2);
     assert.equal(model.redo(0), false);
 
     // A fresh edit after an undo discards the redo branch.
     model.undo(0);
-    model.applyRect(new IVec3(0, 2, 0), new IVec3(0, 2, 0), 0);
+    model.placeAt(new IVec3(0, 2, 0), 0);
     assert.equal(model.canRedo, false);
   });
 
   it("faces a new station down the lane, because P0 has no rotation tool", () => {
     const model = editor();
     model.selectPalette("station");
-    model.applyRect(new IVec3(0, 1, 0), new IVec3(0, 1, 0), 0);
+    model.placeAt(new IVec3(0, 1, 0), 0);
     const blueprint = model.blueprint();
     const block = blueprint.blockAtPosition(new IVec3(0, 1, 0));
     assert.notEqual(block, null);
@@ -107,7 +116,9 @@ describe("EditorModel", () => {
     // Far more stone than 500 material can pay for: five columns, eight courses each.
     for (let x = 0; x <= 4; x++) {
       for (let y = 2; y <= 9; y++) {
-        model.applyRect(new IVec3(x, y, 0), new IVec3(x, y, 4), 0);
+        for (let z = 0; z <= 4; z++) {
+          model.placeAt(new IVec3(x, y, z), 0);
+        }
       }
     }
     assert.ok(model.cost > dials.materialBudget);
@@ -120,7 +131,7 @@ describe("EditorModel", () => {
   it("holds the structural rows back until the debounce has elapsed", () => {
     const model = editor();
     model.selectPalette("wood");
-    model.applyRect(new IVec3(2, 2, 2), new IVec3(2, 2, 2), 1000);
+    model.placeAt(new IVec3(2, 2, 2), 1000);
     assert.equal(model.awaitingSolve, true);
     assert.equal(model.solveDue(1000), false, "not immediately");
     assert.equal(model.solveDue(1000 + EditorModel.SOLVE_DEBOUNCE_MS - 1), false);
@@ -134,7 +145,7 @@ describe("EditorModel", () => {
   it("loads a design and forgets the history of the one before it", () => {
     const model = editor();
     model.selectPalette("wood");
-    model.applyRect(new IVec3(2, 2, 2), new IVec3(2, 2, 2), 0);
+    model.placeAt(new IVec3(2, 2, 2), 0);
     assert.equal(model.canUndo, true);
     model.load(SampleBlueprints.severedDepotTurret(), 0);
     assert.equal(model.canUndo, false, "undoing into another design would be nonsense");

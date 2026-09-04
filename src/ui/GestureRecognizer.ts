@@ -101,8 +101,9 @@ export class GestureRecognizer {
     }
     if (this.primaryId >= 0 && this.secondaryId < 0 && pointerId !== this.primaryId) {
       // Pinch entry is the second pointer down (6.2), and it *cancels* rather than
-      // committing whatever the first finger had started. A tester spreading two fingers to
-      // look at a joint is not placing a rectangle of stone.
+      // committing whatever the first finger had started. Since touch-gestures spec 2.4
+      // that is a pan being interrupted rather than a placement being discarded, and the
+      // cancel is kept because the first finger's drag must not go on being a pan.
       this.secondaryId = pointerId;
       this.secondaryX = x;
       this.secondaryY = y;

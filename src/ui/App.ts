@@ -42,6 +42,7 @@ import { GestureIntent, GestureKind } from "./GestureIntent";
 import { MousePress } from "./MousePress";
 import { GesturePhase, GestureRecognizer } from "./GestureRecognizer";
 import { LayoutMode, layoutModeName, pointerKindName } from "./LayoutMode";
+import { PointerTarget } from "./PointerTarget";
 import { PanelGroup, PanelSheet } from "./PanelSheet";
 import { ChainRow, RunPanels } from "./RunPanels";
 import { Shell } from "./Shell";
@@ -1405,19 +1406,24 @@ export class App implements SimTarget, FitTarget {
    * `inspectOnly` is 2.6's alt-click, which the finger has no way to ask for.
    */
   private onClick(clientX: number, clientY: number, inspectOnly: boolean): boolean {
-    const cell = this.cellAtClient(clientX, clientY);
     if (this.screen === Screen.Design) {
-      // Without a modifier a click places, because placement is the verb the editor is for;
+      // Without a modifier a click edits, because editing is the verb the editor is for;
       // with one it inspects, or there would be no way to read a cell's joints without
-      // changing the design first.
-      let placed = false;
-      if (!inspectOnly && this.editor.placeAt(cell, App.now())) {
+      // changing the design first. The two address different cells now (pointing spec 2):
+      // an inspect names the block it can see, an edit places into the build plane -- or,
+      // with the eraser armed, takes away the block it can see.
+      const edited = inspectOnly ? null : this.editTargetAt(clientX, clientY);
+      if (edited !== null && this.editor.placeAt(edited, App.now())) {
         this.refreshDesignFrame();
-        placed = true;
+        this.dispatcher.dispatchView(ViewCommand.select(edited));
+        this.panelDirty = true;
+        return true;
       }
-      this.dispatcher.dispatchView(ViewCommand.select(cell));
+      // Nothing changed -- an inspect, or the eraser over empty scene -- so the click
+      // selects the cell it was pointing at rather than the one it would have edited.
+      this.dispatcher.dispatchView(ViewCommand.select(this.inspectCellAt(clientX, clientY)));
       this.panelDirty = true;
-      return placed;
+      return false;
     }
     // 6.2: focus-fire the attacker under the click, else inspect the cell.
     const target = this.screen === Screen.Run ? this.attackerAt(clientX, clientY) : -1;
@@ -1477,20 +1483,52 @@ export class App implements SimTarget, FitTarget {
   }
 
   /**
-   * The cell an inspect addresses (isometric renderer spec 5.2, spec 5.3).
+   * The cell an inspect addresses: the frontmost visible block under the pointer, on every
+   * screen (isometric renderer spec 5.2, pointing spec 2.1).
    *
-   * Two rules, and the split is the spec's: **placement lands in the build plane and only
-   * ever there**, so on Design a hover has to predict where the click will go and therefore
-   * reads the plane too. Everywhere else there is nothing to place, so an inspect addresses
-   * the frontmost visible block instead -- which is what a tester means when they point at a
-   * wall four sections back during a replay.
+   * Design used to be an exception -- it read the build plane, on the argument that a hover
+   * has to predict where a click will go -- and that made a long-press on the front face of
+   * the pad answer "empty" about a cell the finger never pointed at. The prediction belongs
+   * to the hover of 2.4, which is a different question from what a tester is pointing at.
    */
   private inspectCellAt(clientX: number, clientY: number): IVec3 {
-    if (this.screen === Screen.Design) {
-      return this.cellAtClient(clientX, clientY);
+    return PointerTarget.toInspect(
+      this.renderer.pickAt(this.frame(), this.view, clientX, clientY),
+      this.cellAtClient(clientX, clientY)
+    );
+  }
+
+  /**
+   * The cell an edit changes, or `null` when there is nothing to change (pointing spec 2.2,
+   * 2.3).
+   *
+   * A placing entry lands in the build plane and nowhere else, because iso spec 5.3's
+   * mis-click hazard is real for a block that has no position until the click gives it one.
+   * The eraser's target is already drawn and already frontmost, so picking it is reading the
+   * answer off the screen rather than guessing at it -- and over empty scene there is no
+   * answer, which is what `null` says.
+   */
+  private editTargetAt(clientX: number, clientY: number): IVec3 | null {
+    return PointerTarget.toEdit(
+      this.editor.palette.erases,
+      this.renderer.pickAt(this.frame(), this.view, clientX, clientY),
+      this.cellAtClient(clientX, clientY)
+    );
+  }
+
+  /**
+   * The cell a hover outlines: the one the armed tool would change (pointing spec 2.4).
+   *
+   * Only a mouse has a hover (mobile UI spec 6.3), and what it is for is the question "what
+   * will this click do" -- so it follows the palette, or arming the eraser would leave the
+   * preview pointing at a cell the click will not touch. Off Design there is nothing to
+   * arm and the hover is an inspect.
+   */
+  private hoverCellAt(clientX: number, clientY: number): IVec3 | null {
+    if (this.screen !== Screen.Design) {
+      return this.inspectCellAt(clientX, clientY);
     }
-    const picked = this.renderer.pickAt(this.frame(), this.view, clientX, clientY);
-    return picked === null ? this.cellAtClient(clientX, clientY) : picked;
+    return this.editTargetAt(clientX, clientY);
   }
 
   /**
@@ -1519,7 +1557,7 @@ export class App implements SimTarget, FitTarget {
     // Hover, which only a mouse has (6.3). It keeps updating under a press that has not yet
     // become a drag: the tester is still pointing at the cell they pressed on.
     this.dispatcher.dispatchView(
-      ViewCommand.inspect(this.inspectCellAt(event.clientX, event.clientY))
+      ViewCommand.inspect(this.hoverCellAt(event.clientX, event.clientY))
     );
   }
 

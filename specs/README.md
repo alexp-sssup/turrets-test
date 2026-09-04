@@ -20,6 +20,9 @@ What is here so far:
 - [`20260904-loss-conditions.md`](20260904-loss-conditions.md) — how a run ends. Removes the
   Core block from P0 and replaces the win-condition dial in §5 of the P0 spec with a win and
   two named losses, wrecked and unmanned.
+- [`20260904-touch-gestures.md`](20260904-touch-gestures.md) — a one-finger drag pans on
+  every screen. Amends the gesture table and caption rows of the mobile UI spec; the mouse
+  keeps drag-to-place.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

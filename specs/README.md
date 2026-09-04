@@ -38,6 +38,9 @@ What is here so far:
 - [`20260904-pointing-at-blocks.md`](20260904-pointing-at-blocks.md) — inspect and the
   eraser address the block under the pointer. Restores §5.2 of the isometric renderer spec
   on the Design screen and carves the eraser out of its §5.3; placement stays plane-locked.
+- [`20260904-gun-ports.md`](20260904-gun-ports.md) — a station is a firing slit and its
+  gunner stands in it. Adds a second passable kind beside the hatch, deletes the
+  `StationNoCrewSpace` violation, and corrects a round-trip pair quoted in the hatches spec.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

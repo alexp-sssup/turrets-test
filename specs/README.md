@@ -32,6 +32,9 @@ What is here so far:
   one dial. Its §7 is superseded by the document below.
 - [`20260904-crew-access.md`](20260904-crew-access.md) — crew walk in through an opening in
   the ground floor, and hatches are only for going up. Deletes the "no hatch" violation.
+- [`20260904-standable-ground.md`](20260904-standable-ground.md) — the pad and a one-cell
+  apron are a floor crew can stand on. Closes the edge the document above left open, and
+  narrows where corridor-severing bites.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

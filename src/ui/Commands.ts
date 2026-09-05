@@ -63,7 +63,7 @@ export enum ViewCommandKind {
   Seek = 3,
   Pan = 4,
   Zoom = 5,
-  /** Which cross-section is the build plane, and therefore the peel (iso renderer spec 6). */
+  /** Which cross-section is the reach plane, and therefore the peel (iso renderer spec 6). */
   Slice = 6,
   /**
    * Frame the design in the viewport (mobile UI spec 7.1).

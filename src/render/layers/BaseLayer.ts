@@ -14,10 +14,10 @@ import { FieldFrame } from "../FieldFrame";
  *
  * Three passes, in this order and for this reason:
  *
- * 1. **The scene** -- ground, pad, build plane, range marker. Nothing in it can occlude a
+ * 1. **The scene** -- ground, pad, reach plane, range marker. Nothing in it can occlude a
  *    voxel, so it goes down first and never enters the sort.
  * 2. **The composition** -- every voxel, actor, shadow and round in one back-to-front pass
- *    (`FieldComposition`). Cells outside the build plane are never hidden: a tester needs to
+ *    (`FieldComposition`). Cells outside the reach plane are never hidden: a tester needs to
  *    know the wall they are looking at has three more of itself behind it, and hiding them
  *    would make a five-wide turret look one-wide. What that costs differs by projection --
  *    the isometric view gives every section its own place and applies the peel rule of spec
@@ -43,8 +43,7 @@ export class BaseLayer implements Layer {
       design.sliceMax,
       context.view.slice,
       context.view.yaw,
-      context.view.mode,
-      context.view.peel
+      context.view.mode
     );
     // Spec 8: the static pass is composited once and blitted after that, for the frames it
     // is sound to cache -- which is every frame with nothing moving in it. A live wave pays
@@ -55,7 +54,7 @@ export class BaseLayer implements Layer {
     } else {
       const capture = this.cache.begin(context, signature);
       const into = capture === null ? context : capture;
-      ScenePainter.paint(into);
+      ScenePainter.paint(into, peel);
       this.composition.draw(into, peel);
       if (capture !== null) {
         this.cache.end();

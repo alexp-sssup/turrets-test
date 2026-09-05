@@ -88,9 +88,9 @@ export class Palette {
   public static readonly groundAccent: string = "rgba(139,152,171,0.16)";
   /** Contact shadows, which spec 7.3 makes mandatory: without them an actor floats. */
   public static readonly shadow: string = "rgba(6,8,11,0.45)";
-  /** The build plane a click resolves in (spec 5.3), drawn so placement is not a guess. */
-  public static readonly buildPlane: string = "rgba(95,178,255,0.06)";
-  public static readonly buildPlaneLine: string = "rgba(95,178,255,0.22)";
+  /** The reach plane, drawn as the face of the cutaway (face-placement spec 3.4). */
+  public static readonly reachPlane: string = "rgba(95,178,255,0.06)";
+  public static readonly reachPlaneLine: string = "rgba(95,178,255,0.22)";
   /** The outline a peeled section is drawn with: the wall cut away in front of the plane. */
   public static readonly peelEdge: string = "#9fb0c6";
   /** The darker edge stroked along a silhouette or a crease (spec 3.1). */

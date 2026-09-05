@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import { Dials } from "../../src/config/Dials";
 import { SampleBlueprints } from "../../src/blueprint/SampleBlueprints";
 import { approxEqual } from "../../src/core/Numeric";
+import { CellPresence } from "../../src/render/CellPresence";
+import { FaceHit } from "../../src/render/FaceHit";
 import { FieldDesign } from "../../src/render/FieldDesign";
 import { IsoProjection } from "../../src/render/IsoProjection";
 import { Projection } from "../../src/render/Projection";
@@ -11,6 +13,8 @@ import { ViewState } from "../../src/render/ViewState";
 import { ViewYaw } from "../../src/render/ViewYaw";
 import { ZoomLadder } from "../../src/render/ZoomLadder";
 import { Arena } from "../../src/sim/Arena";
+import { GridBounds } from "../../src/core/GridBounds";
+import { IVec3 } from "../../src/core/IVec3";
 
 const dials = Dials.defaults();
 const arena = Arena.p0();
@@ -97,7 +101,7 @@ describe("IsoProjection: the yaw table (isometric renderer spec 2.2)", () => {
 
   it("steps one unit on every axis along the view ray, at every yaw (spec 5.2)", () => {
     // The magnitude on x is what spec 6's proof rests on: one step toward the camera changes
-    // the section index by exactly one, so every occluder of the build plane is in a nearer
+    // the section index by exactly one, so every occluder of the reach plane is in a nearer
     // section.
     for (let id = 0; id < ViewYaw.COUNT; id++) {
       const yaw = ViewYaw.of(id);
@@ -137,7 +141,7 @@ describe("IsoProjection: the yaw table (isometric renderer spec 2.2)", () => {
     assert.equal(ViewYaw.of(2).turned(4).id, 2);
   });
 
-  it("flips which side of the build plane is peeled between yaw 1 and yaw 2 (spec 2.2)", () => {
+  it("flips which side of the reach plane is peeled between yaw 1 and yaw 2 (spec 2.2)", () => {
     assert.equal(ViewYaw.of(0).isInFront(1, 3), true);
     assert.equal(ViewYaw.of(1).isInFront(1, 3), true);
     assert.equal(ViewYaw.of(2).isInFront(1, 3), false);
@@ -164,7 +168,7 @@ describe("IsoProjection: the two inverses (isometric renderer spec 5.1, 5.3)", (
     }
   });
 
-  it("is the exact left inverse in the vertical build plane too, at every yaw", () => {
+  it("is the exact left inverse in a vertical cross-section too, at every yaw", () => {
     for (let id = 0; id < ViewYaw.COUNT; id++) {
       const iso = new IsoProjection(ViewYaw.of(id), 24, -9, 45);
       for (let y = -3; y <= 5; y++) {
@@ -179,7 +183,7 @@ describe("IsoProjection: the two inverses (isometric renderer spec 5.1, 5.3)", (
     }
   });
 
-  it("resolves a click to one unambiguous cell of the build plane (spec 5.3)", () => {
+  it("resolves a screen point to one unambiguous cell of a section (face-placement spec 2.7)", () => {
     const scene = design();
     const view = new ViewState(2);
     Projection.fit(scene, view, 900, 600);
@@ -267,5 +271,85 @@ describe("ZoomLadder (isometric renderer spec 2.3)", () => {
     assert.equal(ZoomLadder.scaled(16, 0.95), 12);
     assert.equal(ZoomLadder.scaled(8, 0.5), 8);
     assert.equal(ZoomLadder.scaled(48, 2), 48);
+  });
+});
+
+describe("Projection: where a placement lands (face-placement spec 2)", () => {
+  /** A hand-written set of cells, the same shape `CellPick`'s own suite uses. */
+  class Cells implements CellPresence {
+    private readonly filled: readonly IVec3[];
+
+    public constructor(filled: readonly IVec3[]) {
+      this.filled = filled;
+    }
+
+    public isSolid(x: number, y: number, z: number): boolean {
+      for (let i = 0; i < this.filled.length; i++) {
+        const cell = this.filled[i];
+        if (cell.x === x && cell.y === y && cell.z === z) {
+          return true;
+        }
+      }
+      return false;
+    }
+  }
+
+  function fitted(scene: FieldDesign, view: ViewState): Projection {
+    Projection.fit(scene, view, 900, 600);
+    return new Projection(scene, view, 900, 600);
+  }
+
+  it("2.2: a click on the empty pad places the cell resting on it", () => {
+    const scene = design();
+    const pad = scene.pad;
+    const view = new ViewState(scene.frontSlice(ViewYaw.initial));
+    const projection = fitted(scene, view);
+    const empty = new Cells([]);
+    const bounds: GridBounds = scene.viewBounds;
+    const screenX = projection.screenX(pad.minX + 0.5, pad.minZ + 0.5);
+    const screenY = projection.screenY(pad.minX + 0.5, pad.level, pad.minZ + 0.5);
+    const picked = projection.pick(empty, bounds, screenX, screenY);
+    assert.equal(picked, null, "nothing built yet");
+    const target = projection.placementAt(picked, empty, screenX, screenY);
+    assert.notEqual(target, null);
+    const cell = target as IVec3;
+    assert.equal(cell.y, pad.level);
+    assert.equal(pad.supportsBlockAt(cell), true, "and it rests on the pad");
+  });
+
+  it("2.1: a click on a block's top face places the cell above it", () => {
+    const scene = design();
+    const pad = scene.pad;
+    const view = new ViewState(scene.frontSlice(ViewYaw.initial));
+    const projection = fitted(scene, view);
+    const standing = new IVec3(pad.minX, pad.level, pad.minZ);
+    const cells = new Cells([standing]);
+    const screenX = projection.screenX(standing.x + 0.5, standing.z + 0.5);
+    const screenY = projection.screenY(standing.x + 0.5, standing.y + 1, standing.z + 0.5);
+    const picked = projection.pick(cells, scene.viewBounds, screenX, screenY);
+    assert.notEqual(picked, null);
+    assert.equal((picked as FaceHit).cell.equals(standing), true);
+    const target = projection.placementAt(picked, cells, screenX, screenY);
+    assert.notEqual(target, null);
+    assert.equal(
+      (target as IVec3).equals(new IVec3(standing.x, standing.y + 1, standing.z)),
+      true
+    );
+  });
+
+  it("2.7: the flat dev view keeps the plane rule, faces and pad and all", () => {
+    const scene = design();
+    const view = new ViewState(2);
+    view.mode = ViewMode.Flat;
+    const projection = fitted(scene, view);
+    const cells = new Cells([]);
+    const screenX = projection.screenX(2, 4) + 2;
+    const screenY = projection.screenY(2, 1, 4) - 2;
+    const target = projection.placementAt(null, cells, screenX, screenY);
+    assert.notEqual(target, null);
+    assert.equal((target as IVec3).equals(projection.cellAt(screenX, screenY)), true);
+    assert.equal((target as IVec3).x, 2, "in the active section and nowhere else");
+    // And there is no pad face to fall back on there either: 2.2 is an isometric rule.
+    assert.equal(projection.groundAt(screenX, screenY), null);
   });
 });

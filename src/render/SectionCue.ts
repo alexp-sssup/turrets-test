@@ -1,10 +1,10 @@
 /**
- * How one cross-section is drawn relative to the build plane (isometric renderer spec 6).
+ * How one cross-section is drawn relative to the reach plane (isometric renderer spec 6).
  *
- * The peel rule in one value type: the build plane is never occluded, everything between it
+ * The peel rule in one value type: the reach plane is never occluded, everything between it
  * and the camera is peeled to a wireframe, and everything behind it is drawn solid and
  * dimmed with distance. A section's treatment is a function of its signed distance from the
- * build plane and of the yaw, and of nothing else -- no camera state, no per-section state,
+ * reach plane and of the yaw, and of nothing else -- no camera state, no per-section state,
  * nothing a tester has to set.
  *
  * Two separate depth cues, and the split is load-bearing. **`dim` mixes a solid cell's
@@ -18,10 +18,10 @@
  */
 export class SectionCue {
   public readonly sectionX: number;
-  /** Sections between this one and the build plane. Zero for the build plane itself. */
+  /** Sections between this one and the reach plane. Zero for the reach plane itself. */
   public readonly distance: number;
   public readonly active: boolean;
-  /** Between the camera and the build plane: this is what gets cut away. */
+  /** Between the camera and the reach plane: this is what gets cut away. */
   public readonly inFront: boolean;
   /** Stroked, not filled. True only for peeled sections. */
   public readonly wireframe: boolean;
@@ -33,7 +33,7 @@ export class SectionCue {
   public readonly dimIndex: number;
   /** Filled with the block's own material colour rather than the flat view's neutral ghost. */
   public readonly material: boolean;
-  /** Glyphs, rack pips and depot fill bars. The build plane only: they are noise behind it. */
+  /** Glyphs, rack pips and depot fill bars. The reach plane only: they are noise behind it. */
   public readonly detail: boolean;
 
   public constructor(
@@ -75,12 +75,12 @@ export class SectionCue {
   /** How many distinct dim rungs exist, and therefore how many fills a palette precomputes. */
   public static readonly DIM_STEPS: number = 5;
 
-  /** The build plane: the full treatment, in every mode. */
+  /** The reach plane: the full treatment, in every mode. */
   public static plane(sectionX: number): SectionCue {
     return new SectionCue(sectionX, 0, true, false, false, 1, 0, 0, true, true);
   }
 
-  /** Behind the build plane, or anywhere at all when nothing is peeled. */
+  /** Behind the reach plane, or anywhere at all when nothing is peeled. */
   public static solid(sectionX: number, distance: number, inFront: boolean): SectionCue {
     let index = distance;
     if (index > SectionCue.DIM_STEPS - 1) {
@@ -93,7 +93,7 @@ export class SectionCue {
     return new SectionCue(sectionX, distance, false, inFront, false, 1, dim, index, true, false);
   }
 
-  /** Between the camera and the build plane: the cutaway, shown as cut away. */
+  /** Between the camera and the reach plane: the cutaway, shown as cut away. */
   public static peeled(sectionX: number, distance: number): SectionCue {
     let alpha = SectionCue.WIRE_NEAREST;
     for (let i = 1; i < distance; i++) {

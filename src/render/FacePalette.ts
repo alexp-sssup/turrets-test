@@ -7,7 +7,7 @@ import { ViewFacing } from "./ViewFacing";
  * Every face fill the base composition can need, precomputed (isometric renderer spec 8).
  *
  * A voxel's fill is a function of four small things -- its material, which of the three
- * camera-facing faces this is, how far its section sits behind the build plane, and how
+ * camera-facing faces this is, how far its section sits behind the reach plane, and how
  * damaged it is -- and three of those are already quantised. So the whole product is a
  * fixed-size table built once, and a frame looks a colour up instead of building one.
  *

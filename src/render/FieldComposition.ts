@@ -17,7 +17,7 @@ import { VoxelPainter } from "./VoxelPainter";
  * because a layer was told to draw them earlier.
  *
  * Both projections come through here, so no layer branches on the mode (spec 10.1). The flat
- * dev view's depth key is simply "is this the build plane", which reproduces its one
+ * dev view's depth key is simply "is this the reach plane", which reproduces its one
  * ordering rule -- the active section draws last so the ghosts stay behind it.
  *
  * Nothing here allocates per cell: the list is typed arrays reused between frames, the
@@ -68,7 +68,7 @@ export class FieldComposition {
     for (let block = 0; block < blueprint.blockCount; block++) {
       const position = blueprint.blockAt(block).position;
       if (!frame.isAlive(block)) {
-        // A hole, and only in the build plane: what the tester lost from the section they
+        // A hole, and only in the reach plane: what the tester lost from the section they
         // are reading.
         if (position.x === context.view.slice) {
           this.list.add(

@@ -1,4 +1,5 @@
 import { IVec3 } from "../core/IVec3";
+import { FaceHit } from "./FaceHit";
 import { FieldFrame } from "./FieldFrame";
 import { DetailLevel } from "./DetailLevel";
 import { FrameCells } from "./FrameCells";
@@ -155,37 +156,72 @@ export class FieldRenderer {
     return new Projection(frame.design, view, this.widthPx, this.heightPx);
   }
 
-  /** The cell a click *places* into: the build plane (isometric renderer spec 5.3). */
-  public cellAt(frame: FieldFrame, view: ViewState, clientX: number, clientY: number): IVec3 {
-    const rect = this.canvas.getBoundingClientRect();
-    return this.projection(frame, view).cellAt(clientX - rect.left, clientY - rect.top);
-  }
-
   /**
-   * The block a click *inspects*: the frontmost visible one under the pointer, wherever it
-   * stands in the world (spec 5.2). `null` over empty scene.
+   * The block a click *addresses*, and the face the view ray entered it through: the
+   * frontmost visible one under the pointer, wherever it stands in the world (spec 5.2,
+   * face-placement spec 2.1). `null` over empty scene.
    */
   public pickAt(
     frame: FieldFrame,
     view: ViewState,
     clientX: number,
     clientY: number
-  ): IVec3 | null {
+  ): FaceHit | null {
     const rect = this.canvas.getBoundingClientRect();
-    const peel = new PeelPlane(
-      frame.design.sliceMin,
-      frame.design.sliceMax,
-      view.slice,
-      view.yaw,
-      view.mode,
-      view.peel
-    );
-    const cells = new FrameCells(frame, peel, true);
+    const cells = new FrameCells(frame, FieldRenderer.peelOf(frame, view), true);
     return this.projection(frame, view).pick(
       cells,
       frame.design.viewBounds,
       clientX - rect.left,
       clientY - rect.top
+    );
+  }
+
+  /**
+   * The cell a click *places* into: across the face it was aimed at, or resting on the pad
+   * (face-placement spec 2). `null` when there is nowhere to put a block.
+   *
+   * Takes the hit from `pickAt` rather than repeating it: a hover asks both questions about
+   * one pointer position, and the ray is walked once for the pair. The occupancy test takes
+   * *every* live block and not the peel-filtered set, because a peeled block is unpickable
+   * while it is still there (spec 2.4).
+   */
+  public placementAt(
+    frame: FieldFrame,
+    view: ViewState,
+    picked: FaceHit | null,
+    clientX: number,
+    clientY: number
+  ): IVec3 | null {
+    const rect = this.canvas.getBoundingClientRect();
+    const cells = new FrameCells(frame, FieldRenderer.peelOf(frame, view), false);
+    return this.projection(frame, view).placementAt(
+      picked,
+      cells,
+      clientX - rect.left,
+      clientY - rect.top
+    );
+  }
+
+  /** The pad cell under a screen point, or `null` off the pad (face-placement spec 2.2). */
+  public groundAt(
+    frame: FieldFrame,
+    view: ViewState,
+    clientX: number,
+    clientY: number
+  ): IVec3 | null {
+    const rect = this.canvas.getBoundingClientRect();
+    return this.projection(frame, view).groundAt(clientX - rect.left, clientY - rect.top);
+  }
+
+  /** The peel this frame is drawn with, derived from the reach plane (spec 3.2). */
+  public static peelOf(frame: FieldFrame, view: ViewState): PeelPlane {
+    return new PeelPlane(
+      frame.design.sliceMin,
+      frame.design.sliceMax,
+      view.slice,
+      view.yaw,
+      view.mode
     );
   }
 

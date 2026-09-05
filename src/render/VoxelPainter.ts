@@ -75,7 +75,7 @@ export class VoxelPainter {
   }
 
   /**
-   * A peeled cell: the wall between the camera and the build plane, shown as cut away
+   * A peeled cell: the wall between the camera and the reach plane, shown as cut away
    * rather than deleted (spec 6). Silhouette and creases only, never a fill.
    */
   public paintWireframe(
@@ -119,7 +119,7 @@ export class VoxelPainter {
   }
 
   /**
-   * A hole where a block used to be, in the build plane only.
+   * A hole where a block used to be, in the reach plane only.
    *
    * "What did I lose" is the first question the replay has to answer, and it is a question
    * about the section the tester is reading. Holes in every section at once would be a
@@ -191,7 +191,7 @@ export class VoxelPainter {
 
   /**
    * The kind badge: a ring on the top face in every solid section, the glyph only in the
-   * build plane (spec 3.2).
+   * reach plane (spec 3.2).
    *
    * A depot two sections back is worth knowing about -- that is the interior read the
    * projection exists for -- but its glyph behind a wall is noise.

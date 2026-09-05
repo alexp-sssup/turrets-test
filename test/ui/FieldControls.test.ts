@@ -30,7 +30,7 @@ describe("FieldControls", () => {
     const fine = FieldControls.caption(false);
     const coarse = FieldControls.caption(true);
 
-    assert.ok(fine.indexOf("click to place") >= 0);
+    assert.ok(fine.indexOf("click a face to build on it") >= 0);
     assert.ok(fine.indexOf("wheel to zoom") >= 0);
     // The key it names is drawn as a key cap, and only because the table has that binding.
     assert.ok(fine.indexOf("<kbd>[ ]</kbd> cross-section") >= 0);
@@ -56,12 +56,12 @@ describe("FieldControls", () => {
    * promise a rectangle, and it must say that a plain drag pans.
    */
   it("promises a pan and no rectangle on a coarse pointer (touch-gestures spec 5)", () => {
-    assert.equal(FieldControls.hintFor("place", true), "tap to place");
+    assert.equal(FieldControls.hintFor("place", true), "tap a face to build on it");
     assert.equal(FieldControls.hintFor("pan", true), "drag to pan, or two fingers");
 
     const coarse = FieldControls.caption(true);
     assert.equal(coarse.indexOf("rectangle"), -1, "a finger cannot place one (2.1)");
-    assert.ok(coarse.indexOf("tap to place") >= 0);
+    assert.ok(coarse.indexOf("tap a face to build on it") >= 0);
     assert.ok(coarse.indexOf("drag to pan") >= 0);
   });
 
@@ -70,7 +70,7 @@ describe("FieldControls", () => {
    * column may promise one and both say the same two things in their own words.
    */
   it("promises a click and no rectangle on a fine pointer (mouse-gestures spec 4)", () => {
-    assert.equal(FieldControls.hintFor("place", false), "click to place");
+    assert.equal(FieldControls.hintFor("place", false), "click a face to build on it");
     assert.equal(FieldControls.hintFor("pan", false), "drag to pan, or shift-drag");
 
     const fine = FieldControls.caption(false);
@@ -143,7 +143,7 @@ describe("FieldControls", () => {
     stepper.peeling = true;
     assert.ok(FieldControls.sliceControl(stepper).indexOf("x = 3 · 12 blocks · 3 peeled") >= 0);
 
-    // Nothing in front of the build plane is nothing to say.
+    // Nothing in front of the reach plane is nothing to say.
     stepper.peeledSections = 0;
     assert.equal(FieldControls.sliceControl(stepper).indexOf("peeled"), -1);
 

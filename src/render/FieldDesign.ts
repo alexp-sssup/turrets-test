@@ -7,6 +7,7 @@ import { WeaponClass, WeaponClassId, WeaponTable } from "../materials/WeaponTabl
 import { Blueprint } from "../blueprint/Blueprint";
 import { Arena } from "../sim/Arena";
 import { PadSurface } from "../structure/SupportSurface";
+import { ViewYaw } from "./ViewYaw";
 
 /**
  * The part of a scene that does not change tick to tick: the design, the pad, the lane and
@@ -71,6 +72,18 @@ export class FieldDesign {
   public get sliceMax(): number {
     const design = this.blueprint.bounds.min.x + this.blueprint.bounds.size.x - 1;
     return design > this.pad.maxX ? design : this.pad.maxX;
+  }
+
+  /**
+   * The section nearest the camera, and therefore where the reach plane rests when nothing
+   * is peeled (face-placement spec 3.3).
+   *
+   * A fact about the yaw and not about the design: `nearerSide` is the sign the section index
+   * moves in one step toward the camera (isometric renderer spec 2.2), so a quarter turn puts
+   * this at the other end of the turret -- which is why a quarter turn resets the plane.
+   */
+  public frontSlice(yaw: ViewYaw): number {
+    return yaw.nearerSide < 0 ? this.sliceMin : this.sliceMax;
   }
 
   public clampSlice(x: number): number {

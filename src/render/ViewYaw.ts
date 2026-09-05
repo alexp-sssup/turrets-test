@@ -4,7 +4,7 @@
  * The projection needs exactly two things from a yaw, and both are integers: which world
  * ground axis runs **down and to the right** on screen (`p`), and which runs **up and to
  * the right** (`r`). Everything else in the renderer -- the depth key, the view ray, which
- * cube faces are camera-facing, which side of the build plane gets peeled -- falls out of
+ * cube faces are camera-facing, which side of the reach plane gets peeled -- falls out of
  * those two by arithmetic rather than by a table someone has to keep in step.
  *
  * `p` and `r` are signed selections of world x and z, so the map is an integer rotation and
@@ -92,7 +92,7 @@ export class ViewYaw {
    *
    * The x component is +/-1 at every yaw, which is the fact the peel rule of spec 6 is
    * argued from: one step toward the camera changes the section index by exactly one, so
-   * every occluder of the build plane sits in a nearer section.
+   * every occluder of the reach plane sits in a nearer section.
    */
   public get rayStepX(): number {
     return this.pOfX - this.rOfX;
@@ -107,14 +107,14 @@ export class ViewYaw {
   }
 
   /**
-   * Which side of the build plane is peeled: -1 when nearer sections have the smaller x,
+   * Which side of the reach plane is peeled: -1 when nearer sections have the smaller x,
    * +1 when they have the larger (spec 2.2's table, spec 6's rule).
    */
   public get nearerSide(): number {
     return this.rayStepX;
   }
 
-  /** True when the section is between the camera and the build plane, and so is peeled. */
+  /** True when the section is between the camera and the reach plane, and so is peeled. */
   public isInFront(sectionX: number, activeX: number): boolean {
     return (sectionX - activeX) * this.nearerSide > 0;
   }

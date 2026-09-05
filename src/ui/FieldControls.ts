@@ -53,16 +53,18 @@ export class FieldControls {
    */
   public static readonly HINTS: readonly InputHint[] = [
     // Mouse-gestures spec 4: one gesture model on both pointers. Placement is single-cell
-    // and a drag pans, so neither column promises a rectangle any more.
-    new InputHint("place", "", "click to place", "tap to place"),
+    // and a drag pans, so neither column promises a rectangle any more. Face-placement spec
+    // 2.1: it lands against the face it was aimed at, so the copy says which face -- it is
+    // the only place the rule is written down where a tester will read it.
+    new InputHint("place", "", "click a face to build on it", "tap a face to build on it"),
     new InputHint("inspect", "alt-click", "alt-click to inspect", "long-press to inspect, drag to sweep"),
     new InputHint("pan", "", "drag to pan, or shift-drag", "drag to pan, or two fingers"),
     new InputHint("zoom", "", "wheel to zoom", "pinch to zoom"),
     new InputHint("fit", "", "", "double-tap to fit"),
     new InputHint("overlay", "1–5", "1–5 overlays", "overlay row below"),
     new InputHint("cross-section", "[ ]", "[ ] cross-section", "slice stepper below"),
-    // Isometric renderer spec 9: one new verb. `[` and `]` already move the peel, because
-    // the peel plane is the cross-section.
+    // Isometric renderer spec 9: one new verb. `[` and `]` move the reach plane, and the
+    // peel follows it rather than sitting beside it (face-placement spec 3.2).
     new InputHint("yaw-left", "q", "q e turn the camera", "compass below"),
     new InputHint("yaw-right", "e", "", ""),
     new InputHint("undo", "z", "", ""),

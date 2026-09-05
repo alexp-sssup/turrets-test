@@ -2,8 +2,11 @@ import { GridBounds } from "../core/GridBounds";
 import { IVec3 } from "../core/IVec3";
 import { CellPick } from "./CellPick";
 import { CellPresence } from "./CellPresence";
+import { FaceHit } from "./FaceHit";
 import { FieldDesign } from "./FieldDesign";
+import { GroundPick } from "./GroundPick";
 import { IsoProjection } from "./IsoProjection";
+import { PlacementRule } from "./PlacementRule";
 import { ViewMode } from "./ViewMode";
 import { ViewState } from "./ViewState";
 import { ZoomLadder } from "./ZoomLadder";
@@ -55,7 +58,7 @@ export class Projection {
     return this.view.mode === ViewMode.Iso;
   }
 
-  /** The cross-section a click resolves in, and the peel plane (spec 5.3, spec 6). */
+  /** The reach plane: the nearest addressable section (face-placement spec 3.1, spec 6). */
   public get section(): number {
     return this.view.slice;
   }
@@ -91,12 +94,12 @@ export class Projection {
   }
 
   /**
-   * The cell a click places into: the build plane, and only ever the build plane (spec 5.3).
+   * The cell of the reach plane under a screen point.
    *
-   * Placement resolving by picking would let a mis-click land a block a section from the one
-   * the tester meant, and spec 1.3's anti-blob measurements are measurements of what testers
-   * *chose* to build. With the peel engaged nothing stands in front of this plane, so the
-   * click is not a guess (spec 6).
+   * This was where every placement landed (spec 5.3) and is not any more: face-placement
+   * spec 2.1 builds against the face a click was aimed at. What is left for it is the flat
+   * developer view of spec 9, which has no faces to aim at and keeps the plane rule
+   * (face-placement spec 2.7).
    */
   public cellAt(screenX: number, screenY: number): IVec3 {
     if (!this.isIso) {
@@ -111,15 +114,51 @@ export class Projection {
   }
 
   /**
-   * The frontmost visible block under a screen point (spec 5.2), for hover, inspection,
-   * focus-fire and the replay's joint locate. `null` when the pointer is over empty scene.
+   * The frontmost visible block under a screen point, and the face the view ray entered it
+   * through (spec 5.2, face-placement spec 2.1). `null` when the pointer is over empty scene.
+   *
+   * One pick serves all three verbs: inspect names the block (pointing spec 2.1), the eraser
+   * removes it (pointing spec 2.2), and a placement builds across its face.
    */
-  public pick(cells: CellPresence, bounds: GridBounds, screenX: number, screenY: number): IVec3 | null {
+  public pick(
+    cells: CellPresence,
+    bounds: GridBounds,
+    screenX: number,
+    screenY: number
+  ): FaceHit | null {
     if (!this.isIso) {
       const cell = this.cellAt(screenX, screenY);
-      return cells.isSolid(cell.x, cell.y, cell.z) ? cell : null;
+      return cells.isSolid(cell.x, cell.y, cell.z) ? FaceHit.onTop(cell) : null;
     }
     return CellPick.pick(this.iso, cells, bounds, screenX, screenY);
+  }
+
+  /** The pad cell under a screen point, or `null` off the pad (face-placement spec 2.2). */
+  public groundAt(screenX: number, screenY: number): IVec3 | null {
+    if (!this.isIso) {
+      return GroundPick.NONE;
+    }
+    return GroundPick.at(this.iso, this.design.pad, screenX, screenY);
+  }
+
+  /**
+   * The cell a placement fills, or `null` when there is nowhere to put one (face-placement
+   * spec 2).
+   *
+   * `occupied` is every live block, peeled or not, because the pick skips peeled cells while
+   * the blocks are still there (spec 2.4). In the flat developer view the plane rule survives
+   * whole: the cell under the pointer in the active section, faces and pad and all (spec 2.7).
+   */
+  public placementAt(
+    picked: FaceHit | null,
+    occupied: CellPresence,
+    screenX: number,
+    screenY: number
+  ): IVec3 | null {
+    if (!this.isIso) {
+      return this.cellAt(screenX, screenY);
+    }
+    return PlacementRule.target(picked, this.groundAt(screenX, screenY), occupied);
   }
 
   /**

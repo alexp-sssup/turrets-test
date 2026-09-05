@@ -20,9 +20,9 @@ function design(): FieldDesign {
 }
 
 describe("PeelPlane: the treatment table (isometric renderer spec 6)", () => {
-  it("draws the build plane in full, peels what is in front and dims what is behind", () => {
+  it("draws the reach plane in full, peels what is in front and dims what is behind", () => {
     const yaw = ViewYaw.of(0); // nearer sections have the smaller x
-    const peel = new PeelPlane(0, 4, 2, yaw, ViewMode.Iso, true);
+    const peel = new PeelPlane(0, 4, 2, yaw, ViewMode.Iso);
     const plane = peel.cueFor(2);
     assert.equal(plane.active, true);
     assert.equal(plane.wireframe, false);
@@ -46,42 +46,45 @@ describe("PeelPlane: the treatment table (isometric renderer spec 6)", () => {
   it("dims by mixing toward the background, never by alpha (spec 6.1)", () => {
     // Alpha composites multiply, so a translucent cell's luminance would depend on how many
     // cells sat behind it -- the one thing UI spec 4 forbids. Only the wireframe uses alpha.
-    const peel = new PeelPlane(0, 4, 2, ViewYaw.of(0), ViewMode.Iso, true);
+    const peel = new PeelPlane(0, 4, 2, ViewYaw.of(0), ViewMode.Iso);
     assert.equal(peel.cueFor(3).alpha, 1);
     assert.equal(peel.cueFor(4).alpha, 1);
     assert.equal(peel.cueFor(1).alpha < 1, true);
     assert.equal(peel.cueFor(1).dim, 0);
     // Both ramps have a floor: a section faded to nothing has been deleted, not dimmed.
     assert.equal(peel.cueFor(0).alpha >= SectionCue.WIRE_FLOOR, true);
-    assert.equal(new PeelPlane(0, 20, 20, ViewYaw.of(0), ViewMode.Iso, true).cueFor(0).dim <= SectionCue.DIM_CEILING, true);
+    assert.equal(new PeelPlane(0, 20, 20, ViewYaw.of(0), ViewMode.Iso).cueFor(0).dim <= SectionCue.DIM_CEILING, true);
   });
 
   it("flips the peeled side with the yaw (spec 2.2)", () => {
-    assert.equal(new PeelPlane(0, 4, 2, ViewYaw.of(1), ViewMode.Iso, true).isPeeled(1), true);
-    assert.equal(new PeelPlane(0, 4, 2, ViewYaw.of(1), ViewMode.Iso, true).isPeeled(3), false);
-    assert.equal(new PeelPlane(0, 4, 2, ViewYaw.of(2), ViewMode.Iso, true).isPeeled(3), true);
-    assert.equal(new PeelPlane(0, 4, 2, ViewYaw.of(2), ViewMode.Iso, true).isPeeled(1), false);
+    assert.equal(new PeelPlane(0, 4, 2, ViewYaw.of(1), ViewMode.Iso).isPeeled(1), true);
+    assert.equal(new PeelPlane(0, 4, 2, ViewYaw.of(1), ViewMode.Iso).isPeeled(3), false);
+    assert.equal(new PeelPlane(0, 4, 2, ViewYaw.of(2), ViewMode.Iso).isPeeled(3), true);
+    assert.equal(new PeelPlane(0, 4, 2, ViewYaw.of(2), ViewMode.Iso).isPeeled(1), false);
   });
 
-  it("peels nothing at all when nothing is being peeled: the game view (spec 6)", () => {
-    const solid = new PeelPlane(0, 4, 2, ViewYaw.of(0), ViewMode.Iso, false);
+  it("peels nothing with the plane at the frontmost section: the game view (spec 6)", () => {
+    // Face-placement spec 3.2: "solid" is not a mode, it is where the one control sits. At
+    // yaw 0 the nearer sections have the smaller x, so the frontmost section is 0.
+    const solid = new PeelPlane(0, 4, 0, ViewYaw.of(0), ViewMode.Iso);
+    assert.equal(solid.peeling, false);
     assert.equal(solid.peeledCount, 0);
     for (let x = 0; x <= 4; x++) {
       assert.equal(solid.cueFor(x).wireframe, false);
       assert.equal(solid.cueFor(x).material, true);
       assert.equal(solid.cueFor(x).dim, 0, "a Run frame does not fade half a turret");
     }
-    assert.equal(solid.cueFor(2).detail, true, "the build plane still carries the glyphs");
+    assert.equal(solid.cueFor(0).detail, true, "the reach plane still carries the glyphs");
   });
 
   it("counts the peel, because a cutaway a tester has not noticed reads as a missing wall", () => {
-    assert.equal(new PeelPlane(0, 4, 2, ViewYaw.of(0), ViewMode.Iso, true).peeledCount, 2);
-    assert.equal(new PeelPlane(0, 4, 0, ViewYaw.of(0), ViewMode.Iso, true).peeledCount, 0);
-    assert.equal(new PeelPlane(0, 4, 4, ViewYaw.of(0), ViewMode.Iso, true).peeledCount, 4);
+    assert.equal(new PeelPlane(0, 4, 2, ViewYaw.of(0), ViewMode.Iso).peeledCount, 2);
+    assert.equal(new PeelPlane(0, 4, 0, ViewYaw.of(0), ViewMode.Iso).peeledCount, 0);
+    assert.equal(new PeelPlane(0, 4, 4, ViewYaw.of(0), ViewMode.Iso).peeledCount, 4);
   });
 
   it("ghosts every other section in the flat dev view, and peels nothing (spec 9)", () => {
-    const flat = new PeelPlane(0, 4, 2, ViewYaw.of(0), ViewMode.Flat, true);
+    const flat = new PeelPlane(0, 4, 2, ViewYaw.of(0), ViewMode.Flat);
     assert.equal(flat.peeledCount, 0, "there is no depth to peel");
     assert.equal(flat.cueFor(1).material, false);
     assert.equal(flat.cueFor(3).material, false);
@@ -101,17 +104,17 @@ describe("PeelPlane: the treatment table (isometric renderer spec 6)", () => {
 
 describe("PeelPlane: the property it is argued from (isometric renderer spec 6)", () => {
   /**
-   * The claim: peeling the sections in front of the build plane is *exactly enough*, because
+   * The claim: peeling the sections in front of the reach plane is *exactly enough*, because
    * one step along the view ray changes the section index by exactly one. This walks the ray
-   * out of every build-plane cell and asserts that everything on it is peeled.
+   * out of every reach-plane cell and asserts that everything on it is peeled.
    */
-  it("puts every cell on the ray out of the build plane in a peeled section", () => {
+  it("puts every cell on the ray out of the reach plane in a peeled section", () => {
     const scene = design();
     const blueprint = scene.blueprint;
     for (let id = 0; id < ViewYaw.COUNT; id++) {
       const yaw = ViewYaw.of(id);
       for (let section = scene.sliceMin; section <= scene.sliceMax; section++) {
-        const peel = new PeelPlane(scene.sliceMin, scene.sliceMax, section, yaw, ViewMode.Iso, true);
+        const peel = new PeelPlane(scene.sliceMin, scene.sliceMax, section, yaw, ViewMode.Iso);
         for (let i = 0; i < blueprint.blockCount; i++) {
           const cell = blueprint.blockAt(i).position;
           if (cell.x !== section) {
@@ -127,7 +130,7 @@ describe("PeelPlane: the property it is argued from (isometric renderer spec 6)"
             assert.equal(
               peel.isPeeled(x),
               true,
-              "yaw " + id.toString() + ": an occluder of the build plane was left solid"
+              "yaw " + id.toString() + ": an occluder of the reach plane was left solid"
             );
           }
         }
@@ -137,7 +140,7 @@ describe("PeelPlane: the property it is argued from (isometric renderer spec 6)"
 
   /**
    * The same claim, checked on screen rather than along the ray: no unpeeled cell **from
-   * another section** covers any part of a build-plane cell's silhouette.
+   * another section** covers any part of a reach-plane cell's silhouette.
    *
    * The qualifier is the whole content of spec 6's second paragraph. Cubes within one plane
    * do overlap each other -- a section is a plane of cubes, not a sheet of tiles -- and the
@@ -146,7 +149,7 @@ describe("PeelPlane: the property it is argued from (isometric renderer spec 6)"
    * else that covers the plane is in a nearer section, and is peeled. This asserts both
    * halves: nothing from another section survives, and what survives is only ever in-plane.
    */
-  it("leaves no unpeeled cell from another section projecting over the build plane", () => {
+  it("leaves no unpeeled cell from another section projecting over the reach plane", () => {
     const scene = design();
     const blueprint = scene.blueprint;
     const yaw = ViewYaw.of(0);
@@ -183,7 +186,7 @@ describe("PeelPlane: the property it is argued from (isometric renderer spec 6)"
 
     let inPlaneOverlaps = 0;
     for (let section = scene.sliceMin; section <= scene.sliceMax; section++) {
-      const peel = new PeelPlane(scene.sliceMin, scene.sliceMax, section, yaw, ViewMode.Iso, true);
+      const peel = new PeelPlane(scene.sliceMin, scene.sliceMax, section, yaw, ViewMode.Iso);
       for (let i = 0; i < blueprint.blockCount; i++) {
         const cell = blueprint.blockAt(i).position;
         if (cell.x !== section) {
@@ -225,7 +228,7 @@ describe("PeelPlane: the property it is argued from (isometric renderer spec 6)"
           assert.equal(
             other.x,
             cell.x,
-            "an unpeeled cell from another section covers the build plane"
+            "an unpeeled cell from another section covers the reach plane"
           );
           inPlaneOverlaps += 1;
         }
@@ -233,5 +236,46 @@ describe("PeelPlane: the property it is argued from (isometric renderer spec 6)"
     }
     // And the in-plane case really does occur, so the assertion above is not vacuous.
     assert.equal(inPlaneOverlaps > 0, true);
+  });
+});
+
+describe("PeelPlane: the peel is derived, not flagged (face-placement spec 3.2)", () => {
+  it("peels nothing with the plane at the frontmost section, at every yaw", () => {
+    const scene = design();
+    for (let id = 0; id < ViewYaw.COUNT; id++) {
+      const yaw = ViewYaw.of(id);
+      const front = scene.frontSlice(yaw);
+      const peel = new PeelPlane(scene.sliceMin, scene.sliceMax, front, yaw, ViewMode.Iso);
+      assert.equal(peel.peeling, false, "yaw " + id.toString());
+      assert.equal(peel.peeledCount, 0, "yaw " + id.toString());
+    }
+  });
+
+  it("one step away from the camera peels exactly one section, at every yaw", () => {
+    const scene = design();
+    for (let id = 0; id < ViewYaw.COUNT; id++) {
+      const yaw = ViewYaw.of(id);
+      // One step away from the camera is one step against `nearerSide`.
+      const stepped = scene.frontSlice(yaw) - yaw.nearerSide;
+      const peel = new PeelPlane(scene.sliceMin, scene.sliceMax, stepped, yaw, ViewMode.Iso);
+      assert.equal(peel.peeling, true, "yaw " + id.toString());
+      assert.equal(peel.peeledCount, 1, "yaw " + id.toString());
+    }
+  });
+
+  it("3.3: a quarter turn moves which section is frontmost", () => {
+    const scene = design();
+    const first = scene.frontSlice(ViewYaw.of(0));
+    const opposite = scene.frontSlice(ViewYaw.of(2));
+    assert.equal(first, scene.sliceMin);
+    assert.equal(opposite, scene.sliceMax);
+    // Which is the whole reason a turn resets the plane: left where it was, the frontmost
+    // section of one yaw is the deepest of the other, and the turret turns inside out.
+    const stale = new PeelPlane(scene.sliceMin, scene.sliceMax, first, ViewYaw.of(2), ViewMode.Iso);
+    assert.equal(stale.peeledCount, scene.sliceMax - scene.sliceMin);
+  });
+
+  it("the flat dev view never peels, wherever the plane is (spec 9)", () => {
+    assert.equal(new PeelPlane(0, 4, 2, ViewYaw.of(0), ViewMode.Flat).peeling, false);
   });
 });

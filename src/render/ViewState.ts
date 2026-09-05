@@ -72,19 +72,15 @@ export class ViewState {
   /** Which quarter turn the camera is at (spec 2.2). Four states, `q` and `e`. */
   public yaw: ViewYaw;
   /**
-   * Which x cross-section is the build plane, and therefore where the cutaway sits
-   * (spec 5.3, spec 6). One control, not two: stepping toward the camera peels one more wall
-   * off the front of the turret.
+   * Which x cross-section is the **reach plane**: the nearest section a verb can still
+   * address, and therefore where the cutaway sits (face-placement spec 3.1, spec 6).
+   *
+   * One control with one meaning, now that placement no longer lands in it. Stepping it away
+   * from the camera peels one more wall off the front of the turret and lets a verb reach one
+   * section deeper; parked at the frontmost section it peels nothing, which is why there is
+   * no separate flag for "solid" (spec 3.2).
    */
   public slice: number;
-  /**
-   * Whether the sections between the camera and the build plane are peeled (spec 6).
-   *
-   * Per screen rather than per tester: Design opens on an open cutaway because that is a
-   * workshop, and Run and Replay open on a solid turret because that is the game. `[` and
-   * `]` still engage it during a run for a tester who wants to look inside a failure.
-   */
-  public peel: boolean;
   /** Zoom, in screen pixels per voxel edge. Always a rung of `ZoomLadder` (spec 2.3). */
   public scale: number;
   /** Pan, in screen pixels. */
@@ -103,7 +99,6 @@ export class ViewState {
     this.mode = ViewMode.Iso;
     this.yaw = ViewYaw.initial;
     this.slice = slice;
-    this.peel = true;
     this.scale = ZoomLadder.initial;
     this.panX = 0;
     this.panY = 0;

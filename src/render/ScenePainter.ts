@@ -1,5 +1,6 @@
 import { DrawContext } from "./Layer";
 import { Palette } from "./Palette";
+import { PeelPlane } from "./PeelPlane";
 
 /**
  * The scene the turret stands in (isometric renderer spec 7).
@@ -12,9 +13,9 @@ import { Palette } from "./Palette";
  *   distance along the lane is countable without measuring pixels. This is a grid *on the
  *   ground*, which the flat view's screen-space grid was not.
  * * **The pad**, as the marked area the turret is allowed to stand on rather than a band.
- * * **The build plane**, so a tester can see where a click will land before making it
- *   (spec 5.3). Drawn only while something is being peeled, which is exactly when placement
- *   is what the screen is for.
+ * * **The reach plane**, which is the face of the cutaway: where the wireframe stops and the
+ *   solid turret starts (face-placement spec 3.4). Drawn only while something is peeled,
+ *   which is exactly when a tester could otherwise read a cutaway as a missing wall.
  * * **The gun-range marker on the ground**, across the lane, because a range limit lives on
  *   the ground and "nothing is in range yet" has to stay distinguishable from "my gun is
  *   silent".
@@ -26,7 +27,7 @@ export class ScenePainter {
   /** Tile size, in voxels. Also the accent interval. */
   public static readonly TILE: number = 4;
 
-  public static paint(context: DrawContext): void {
+  public static paint(context: DrawContext, peel: PeelPlane): void {
     const ctx = context.ctx;
     ctx.fillStyle = Palette.sky;
     ctx.fillRect(0, 0, context.projection.widthPx, context.projection.heightPx);
@@ -37,8 +38,8 @@ export class ScenePainter {
     ScenePainter.paintGround(context);
     ScenePainter.paintPad(context);
     ScenePainter.paintRange(context);
-    if (context.view.peel) {
-      ScenePainter.paintBuildPlane(context);
+    if (peel.peeling) {
+      ScenePainter.paintReachPlane(context);
     }
   }
 
@@ -158,10 +159,14 @@ export class ScenePainter {
   }
 
   /**
-   * The plane a click resolves in: a translucent sheet with a one-voxel grid, standing in
-   * the active cross-section (spec 5.3).
+   * The face of the cutaway: a translucent sheet with a one-voxel grid, standing in the reach
+   * plane (face-placement spec 3.4).
+   *
+   * It used to say "a click lands here" (spec 5.3) and no longer can, because a click lands
+   * against the face it was aimed at. What it says instead is where the wireframe stops --
+   * the cue spec 6 owed a tester and gave to the readout alone.
    */
-  private static paintBuildPlane(context: DrawContext): void {
+  private static paintReachPlane(context: DrawContext): void {
     const ctx = context.ctx;
     const design = context.frame.design;
     const bounds = design.viewBounds;
@@ -178,13 +183,13 @@ export class ScenePainter {
     ctx.lineTo(projection.screenX(section, highZ), projection.screenY(section, highY, highZ));
     ctx.lineTo(projection.screenX(section, lowZ), projection.screenY(section, highY, lowZ));
     ctx.closePath();
-    ctx.fillStyle = Palette.buildPlane;
+    ctx.fillStyle = Palette.reachPlane;
     ctx.fill();
 
-    if (projection.scale < 12 || !context.detail.buildGrid) {
+    if (projection.scale < 12 || !context.detail.reachGrid) {
       return;
     }
-    ctx.strokeStyle = Palette.buildPlaneLine;
+    ctx.strokeStyle = Palette.reachPlaneLine;
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let z = lowZ; z <= highZ; z++) {

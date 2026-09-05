@@ -172,7 +172,7 @@ export class Telemetry {
   }
 
   /**
-   * The build plane moved, and therefore the cutaway (spec 6, spec 11).
+   * The reach plane moved, and therefore the cutaway (spec 6, spec 11).
    *
    * Design and Run are counted apart on purpose: the same keystroke means "let me reach in
    * and build" on one screen and "let me see why that failed" on the other, and pooling them

@@ -23,8 +23,8 @@ import { ViewYaw } from "./ViewYaw";
  *
  * * `onLevel` resolves a screen point in a **horizontal** plane, which is what the view ray
  *   of spec 5.2 is built from and what puts a click on the ground.
- * * `inSection` resolves it in the **vertical build plane**, which is where placement lands
- *   and only ever lands (spec 5.3).
+ * * `inSection` resolves it in a **vertical cross-section**, which is where the flat
+ *   developer view of spec 9 still resolves a click (face-placement spec 2.7).
  *
  * Both are two divisions and no search, and both are exact left inverses of the pair above.
  */
@@ -127,7 +127,7 @@ export class IsoProjection {
   }
 
   /**
-   * Screen to world in the vertical cross-section `x = section` (spec 5.3).
+   * Screen to world in the vertical cross-section `x = section` (face-placement spec 2.7).
    *
    * The same algebra with x known instead of y: the first screen term fixes z, and the
    * second then fixes y. `zOfSx` is +/-1 at every yaw, so this never divides by zero and

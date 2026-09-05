@@ -21,7 +21,7 @@ import { OverlayMode, overlayName } from "../ViewState";
  * * **Composes, never replaces.** The composition has already drawn the structure; this
  *   draws on top of it and is occluded by nothing (spec 4.1). A stress bar hidden behind the
  *   wall it describes is a measurement lost.
- * * **Anchored to the build plane.** The joints touching the active section and no others,
+ * * **Anchored to the reach plane.** The joints touching the active section and no others,
  *   at every yaw, so a quarter turn does not change the question the overlay answers.
  */
 export class StressLayer implements Layer {

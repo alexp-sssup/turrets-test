@@ -26,7 +26,7 @@ function frameOf(design: FieldDesign, structure: BlockStructure): FieldFrame {
 }
 
 function peelOf(design: FieldDesign, view: ViewState): PeelPlane {
-  return new PeelPlane(design.sliceMin, design.sliceMax, view.slice, view.yaw, view.mode, view.peel);
+  return new PeelPlane(design.sliceMin, design.sliceMax, view.slice, view.yaw, view.mode);
 }
 
 function signature(design: FieldDesign, frame: FieldFrame, view: ViewState): number {
@@ -63,10 +63,6 @@ describe("StructureCache (isometric renderer spec 8)", () => {
 
     const stepped = new ViewState(3);
     assert.notEqual(signature(design, frame, stepped), base);
-
-    const solid = new ViewState(2);
-    solid.peel = false;
-    assert.notEqual(signature(design, frame, solid), base);
 
     const flat = new ViewState(2);
     flat.mode = ViewMode.Flat;

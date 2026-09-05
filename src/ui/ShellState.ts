@@ -29,7 +29,7 @@ export class ShellState {
   public yaw: number;
   /** Whether a cutaway is engaged, so the readout can name it (spec 6). */
   public peeling: boolean;
-  /** Sections standing between the viewer and the working plane, cut away by the peel rule. */
+  /** Sections standing between the viewer and the reach plane, cut away by the peel rule. */
   public peeledSections: number;
   public slice: number;
   public sliceMin: number;
@@ -92,7 +92,7 @@ export class ShellState {
     this.overlay = OverlayMode.Material;
     this.viewMode = ViewMode.Iso;
     this.yaw = 0;
-    this.peeling = true;
+    this.peeling = false;
     this.peeledSections = 0;
     this.slice = 0;
     this.sliceMin = 0;

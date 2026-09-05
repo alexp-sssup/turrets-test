@@ -56,6 +56,11 @@ What is here so far:
   the isometric renderer and §2.3 of the pointing document, and amends §6 of the isometric
   renderer: the cross-section stops being a build plane and becomes the reach plane, the peel
   is derived from it, and every screen opens on a solid turret.
+- [`20260905-no-cross-sections.md`](20260905-no-cross-sections.md) — the cross-section goes
+  altogether: no slice, no peel, no second projection. The way into an interior is to erase the
+  wall and build it back, and a first-person camera is the eventual answer. Supersedes §6 and
+  §9 of the isometric renderer and §3 of the document above, and deletes §2.5 of the pointing
+  document.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

@@ -51,6 +51,11 @@ What is here so far:
   counted and told apart. The Allocate screen draws the crew it is allocating, crew with no
   post muster one to a cell on the ground, and the role colours are named and keyed. Amends §3
   of the UI spec and §7.4 of the isometric renderer.
+- [`20260905-face-adjacent-placement.md`](20260905-face-adjacent-placement.md) — a click
+  builds against the face it was aimed at, and the pad's surface is a face. Supersedes §5.3 of
+  the isometric renderer and §2.3 of the pointing document, and amends §6 of the isometric
+  renderer: the cross-section stops being a build plane and becomes the reach plane, the peel
+  is derived from it, and every screen opens on a solid turret.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

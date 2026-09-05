@@ -81,6 +81,25 @@ describe("CrewEntry (crew-access spec 2)", () => {
   });
 
   /**
+   * Station-terminus spec 2.3, and the reason that document exists: a gun port in the
+   * ground-floor wall is not a door. The gunner stands in it and nobody walks through it,
+   * so a ring with a station where its doorway would be is as sealed as a ring with a wall
+   * there -- and its gunner is unreachable, which the editor is supposed to say out loud.
+   */
+  it("does not let crew in through a gun port, though a hatch in the same cell is a door", () => {
+    const ported = box(BlockKind.Station);
+    assert.deepEqual(entriesOf(ported), [], "a slit is not a way in");
+    // The port itself is standable -- the gunner stands there -- and still not a way in,
+    // which is exactly the pair of properties that separates it from the hatch above.
+    const graph = WalkGraph.build(ported, PAD);
+    assert.equal(graph.isStandable(new IVec3(1, 1, 0)), true);
+    assert.equal(graph.isPassable(new IVec3(1, 1, 0)), false);
+    // Swap the station for a hatch and the same ring opens, so the seal is the kind and not
+    // the geometry.
+    assert.ok(entriesOf(box(BlockKind.Hatch)).length > 0);
+  });
+
+  /**
    * 2.1: the ground floor is the lowest storey crew can *stand* on, so the solid slab is a
    * floor and the course resting on it is the storey. If it were read as the slab's own
    * level, a sealed box would have no ground floor at all and every design would fail.

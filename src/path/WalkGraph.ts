@@ -11,14 +11,16 @@ import { BlockStructure } from "../structure/BlockStructure";
  * The rules, kept deliberately few so that a violation the editor reports is one a player
  * can see:
  *
- * * A cell is **passable** when it holds no live block, or holds a hatch or a station.
- *   Those two kinds are the openings crew move through: a hatch is a doorway (spec 4.2) and
- *   a station is a firing slit its gunner stands in (gun-ports spec 2.1).
- * * A cell is **standable** when it is passable and either the cell below holds a live
- *   block, or the cell is on the ground plane (standable-ground spec 2), or it is a hatch
- *   or a station -- both of which carry the footing they are stood on (gun-ports spec 2.2).
+ * * A cell is **passable** when a route may pass *through* it: it holds no live block, or it
+ *   holds a hatch. A hatch is a doorway and a doorway is a way through (spec 4.2).
+ * * A cell is **standable** when crew may stand in it: passable, with the cell below holding
+ *   a live block or the cell on the ground plane (standable-ground spec 2) -- or a station,
+ *   which is standable on its own account and asks nothing of either, because it is a place
+ *   to be rather than a way through (station-terminus spec 2.1, 2.2).
  *   So crew walk on top of the structure, along its interior floors, and across the ground
  *   around it -- and a corridor that loses its floor stops being a corridor.
+ * * A cell is a **terminus** when crew may stop in it and no route may continue through it.
+ *   A station is the only one, and `AStar` is what honours it (station-terminus spec 2.3).
  * * Horizontal moves may step up or down by one. Vertical moves need a hatch at one end,
  *   so a hatch column is a ladder and a stack of gun ports is not (gun-ports spec 2.3).
  *
@@ -89,20 +91,21 @@ export class WalkGraph {
   }
 
   /**
-   * Gun-ports spec 2.1: a station is an opening crew occupy, so it is passable like a hatch.
+   * Whether a route may pass *through* this cell: empty air, or a hatch.
    *
-   * The two openings are not the same opening. A hatch is a hole and a shot goes through it
-   * (hatches spec 5); a station is a wall with a slit in it, which is why prototype §4.2 has
-   * a round kill the gunner *through the port* without destroying the block. Passability is
-   * the one property they share, and it is shared because both are person-sized.
+   * Station-terminus spec 2.1 is why a station is not here, although its gunner stands in
+   * one. A hatch is a hole, and a hole is a way through for a person and for a round alike
+   * (hatches spec 5). A slit is person-sized from the inside and not a doorway from the
+   * outside -- which is the same fact prototype §4.2 states from the other end, when a round
+   * kills the gunner through the port and the block survives. Standing in a station is
+   * `isStandable`; getting past one is not a thing.
    */
   public isPassable(cell: IVec3): boolean {
     const block = this.structure.indexAt(cell);
     if (block < 0) {
       return true;
     }
-    const kind = this.structure.kindOf(block);
-    return kind === BlockKind.Hatch || kind === BlockKind.Station;
+    return this.structure.kindOf(block) === BlockKind.Hatch;
   }
 
   /** True when the cell has a floor under it. */
@@ -114,10 +117,15 @@ export class WalkGraph {
     if (!this.boundsValue.contains(cell)) {
       return false;
     }
+    // Station-terminus spec 2.2: a station is stood in rather than passed through, so it is
+    // standable on its own account and asks nothing of passability or of the cell below.
+    if (this.isStation(cell)) {
+      return true;
+    }
     if (!this.isPassable(cell)) {
       return false;
     }
-    return this.hasFloor(cell) || this.isHatch(cell) || this.isStation(cell) || this.isGround(cell);
+    return this.hasFloor(cell) || this.isHatch(cell) || this.isGround(cell);
   }
 
   public isHatch(cell: IVec3): boolean {
@@ -136,6 +144,17 @@ export class WalkGraph {
   public isStation(cell: IVec3): boolean {
     const block = this.structure.indexAt(cell);
     return block >= 0 && this.structure.kindOf(block) === BlockKind.Station;
+  }
+
+  /**
+   * A cell crew may stop in and no route may continue through (station-terminus spec 2.3).
+   *
+   * Asked by the pathfinder, so the rule lives with the block kinds rather than inside the
+   * search: `AStar` accepts a terminus only as a destination. A station is the only one
+   * there is, and this property is the whole of what separates a slit from a doorway.
+   */
+  public isTerminus(cell: IVec3): boolean {
+    return this.isStation(cell);
   }
 
   /**

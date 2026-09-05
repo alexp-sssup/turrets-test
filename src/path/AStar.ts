@@ -104,6 +104,13 @@ export class AStar {
         if (index < 0 || this.closed[index] === 1) {
           continue;
         }
+        // Station-terminus spec 2.3: a terminus is somewhere to stop, not somewhere to go
+        // through, so it is only ever taken as a destination. The rule sits here rather
+        // than in the graph because it is a statement about routes: the *start* is pushed
+        // directly and is never a successor, which is what lets a gunner leave their post.
+        if (this.graph.isTerminus(neighbour) && !goalFlags.has(index)) {
+          continue;
+        }
         const tentative = this.cost[current] + 1;
         if (tentative < this.cost[index]) {
           this.cost[index] = tentative;

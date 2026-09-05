@@ -68,18 +68,64 @@ describe("WalkGraph", () => {
     assert.equal((climb as Path).stepCount, 1);
   });
 
-  it("treats a station as an opening crew stand in, not as a wall (gun-ports spec 2.1, 2.2)", () => {
+  it("makes a station standable without making it passable (station-terminus spec 2.1, 2.2)", () => {
     const builder = floor(3)
       .place(new IVec3(1, 1, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ)
       .place(new IVec3(0, 1, 0), MaterialId.Wood, BlockKind.Structural, Direction.PosZ)
       .place(new IVec3(2, 1, 0), MaterialId.Wood, BlockKind.Structural, Direction.PosZ);
-    const structure = structureOf(builder, "ported");
-    const graph = WalkGraph.build(structure, PAD);
-    // 2.1: the slit is person-sized, so the gunner is in it. The wall beside it is not.
-    assert.equal(graph.isPassable(new IVec3(1, 1, 0)), true);
+    const graph = WalkGraph.build(structureOf(builder, "ported"), PAD);
+    const port = new IVec3(1, 1, 0);
+    // The two predicates disagree on exactly one kind, and that disagreement is the rule:
+    // crew stand in the slit, and no route goes through it.
+    assert.equal(graph.isStandable(port), true, "the gunner stands in it");
+    assert.equal(graph.isPassable(port), false, "and nothing passes through it");
+    assert.equal(graph.isTerminus(port), true);
+    assert.equal(graph.isStation(port), true);
+    // The wall beside it is neither, and a hatch in its place would be both.
+    assert.equal(graph.isStandable(new IVec3(0, 1, 0)), false);
     assert.equal(graph.isPassable(new IVec3(0, 1, 0)), false);
-    assert.equal(graph.isStation(new IVec3(1, 1, 0)), true);
-    assert.equal(graph.isStandable(new IVec3(1, 1, 0)), true);
+    assert.equal(graph.isTerminus(new IVec3(0, 1, 0)), false);
+  });
+
+  it("takes a station as a destination and never as a step (station-terminus spec 2.3)", () => {
+    // A sealed two-cell corridor with the port between its ends: A -- port -- B, with the
+    // lintel above the port solid so there is no way over it either. The only route from A
+    // to B would have to pass through the slit.
+    const walled = new BlueprintBuilder();
+    for (let x = 0; x <= 2; x++) {
+      walled.place(new IVec3(x, 5, 0), MaterialId.Wood, BlockKind.Structural, Direction.PosZ);
+    }
+    walled.place(new IVec3(1, 6, 0), MaterialId.Wood, BlockKind.Station, Direction.NegZ);
+    walled.place(new IVec3(1, 7, 0), MaterialId.Wood, BlockKind.Structural, Direction.PosZ);
+    const graph = WalkGraph.build(structureOf(walled, "walled port"), PAD);
+    const pathfinder = new AStar(graph);
+    const a = new IVec3(0, 6, 0);
+    const b = new IVec3(2, 6, 0);
+    const port = new IVec3(1, 6, 0);
+
+    assert.equal(graph.isStandable(a), true);
+    assert.equal(graph.isStandable(b), true);
+    assert.equal(graph.isStandable(port), true);
+    // A destination: the gunner's post is reachable from the room behind it.
+    const toPost = pathfinder.findPath(a, port);
+    assert.notEqual(toPost, null);
+    assert.equal((toPost as Path).stepCount, 1);
+    // And a leaving route works too, which is what lets a gunner fetch their own rounds.
+    assert.notEqual(pathfinder.findPath(port, a), null);
+    // Not a step: there is no way from one side to the other.
+    assert.equal(pathfinder.findPath(a, b), null);
+
+    // The same wall with a hatch in it is a door, and the route opens. That contrast is the
+    // whole of what separates the two openings (station-terminus spec 2.1).
+    const doored = new BlueprintBuilder();
+    for (let x = 0; x <= 2; x++) {
+      doored.place(new IVec3(x, 5, 0), MaterialId.Wood, BlockKind.Structural, Direction.PosZ);
+    }
+    doored.place(new IVec3(1, 6, 0), MaterialId.Wood, BlockKind.Hatch, Direction.PosZ);
+    doored.place(new IVec3(1, 7, 0), MaterialId.Wood, BlockKind.Structural, Direction.PosZ);
+    const through = new AStar(WalkGraph.build(structureOf(doored, "doored"), PAD)).findPath(a, b);
+    assert.notEqual(through, null);
+    assert.equal((through as Path).stepCount, 2);
   });
 
   it("gives a station its own footing, as the reaching gun needs (gun-ports spec 2.2)", () => {

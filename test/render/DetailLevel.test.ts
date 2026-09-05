@@ -8,7 +8,6 @@ describe("DetailLevel: the degradation order (isometric renderer spec 8)", () =>
     assert.equal(detail.level, DetailLevel.FULL);
     assert.equal(detail.edges, true);
     assert.equal(detail.groundDetail, true);
-    assert.equal(detail.reachGrid, true);
 
     // One expensive frame is not a verdict; a sustained one is.
     detail.observe(40);
@@ -25,13 +24,6 @@ describe("DetailLevel: the degradation order (isometric renderer spec 8)", () =>
     }
     assert.equal(detail.level, DetailLevel.NO_GROUND_DETAIL);
     assert.equal(detail.groundDetail, false);
-    assert.equal(detail.reachGrid, true);
-
-    for (let i = 0; i < DetailLevel.PATIENCE; i++) {
-      detail.observe(40);
-    }
-    assert.equal(detail.level, DetailLevel.NO_REACH_GRID);
-    assert.equal(detail.reachGrid, false);
 
     // The zoom is the last thing, and the view owns it, so it is a request and it is made once.
     assert.equal(detail.takeZoomRequest(), false);

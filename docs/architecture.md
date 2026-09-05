@@ -50,7 +50,6 @@ and `structure` knows nothing about waves.
 | Isometric renderer §3-4 voxels and the sort | `render/VoxelFaces`, `render/VoxelPainter`, `render/DrawList`, `render/FieldComposition` |
 | Isometric renderer §5 picking | `render/CellPick`, `render/FaceHit`, `render/Projection` |
 | Face-adjacent placement §2 | `render/PlacementRule`, `render/GroundPick`, `ui/PointerTarget` |
-| Isometric renderer §6 the peel | `render/PeelPlane`, `render/SectionCue` |
 | Isometric renderer §7 the scene | `render/ScenePainter`, `render/ActorPainter` |
 | Isometric renderer §8 budget | `render/StructureCache`, `render/DetailLevel` |
 

@@ -241,15 +241,6 @@ describe("PredictAnalysis", () => {
 });
 
 describe("FieldDesign", () => {
-  it("offers the design's own cross-sections, widened to the pad", () => {
-    const design = designFor(SampleBlueprints.standardTurret());
-    assert.equal(design.sliceMin, 0);
-    assert.equal(design.sliceMax, 4);
-    assert.equal(design.clampSlice(-4), 0);
-    assert.equal(design.clampSlice(9), 4);
-    assert.equal(design.blocksInSlice(2).length > 0, true);
-  });
-
   it("frames the lane out to gun range so 'out of range' and 'silent' look different", () => {
     const design = designFor(SampleBlueprints.standardTurret());
     const bounds = design.viewBounds;

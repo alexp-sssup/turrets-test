@@ -2,8 +2,8 @@
  * What the renderer drops when it cannot hold the frame budget (isometric renderer spec 8).
  *
  * The order is fixed and it is spent from the cheapest read to the dearest: the silhouette
- * edges first, then the ground's tile accents, then the reach-plane grid, and only then a
- * rung down the zoom ladder. **The timestep is never touched** -- playback degrades, the
+ * edges first, then the ground's tile accents, and only then a rung down the zoom ladder.
+ * **The timestep is never touched** -- playback degrades, the
  * timestep does not (mobile UI spec 8.3), because dropping ticks to make a phone feel smooth
  * would break the prototype's determinism and with it the replay.
  *
@@ -21,11 +21,9 @@ export class DetailLevel {
   public static readonly NO_EDGES: number = 1;
   /** No ground tile accents (spec 7.1). */
   public static readonly NO_GROUND_DETAIL: number = 2;
-  /** No reach-plane grid (face-placement spec 3.4). */
-  public static readonly NO_REACH_GRID: number = 3;
   /** A rung down the zoom ladder, which the view owns and the renderer only asks for. */
-  public static readonly ZOOM_OUT: number = 4;
-  public static readonly WORST: number = 4;
+  public static readonly ZOOM_OUT: number = 3;
+  public static readonly WORST: number = 3;
 
   /** The frame budget the levels are measured against: 60 fps, in milliseconds. */
   public static readonly BUDGET_MS: number = 16;
@@ -54,10 +52,6 @@ export class DetailLevel {
 
   public get groundDetail(): boolean {
     return this.levelValue < DetailLevel.NO_GROUND_DETAIL;
-  }
-
-  public get reachGrid(): boolean {
-    return this.levelValue < DetailLevel.NO_REACH_GRID;
   }
 
   /** True once, when the level reaches the rung-down the view has to apply. */

@@ -68,14 +68,13 @@ export class PredictLayer implements Layer {
     const blueprint = context.frame.design.blueprint;
     for (let i = 0; i < outcome.lostBlocks.length; i++) {
       const position = blueprint.blockAt(outcome.lostBlocks[i]).position;
-      const onSlice = position.x === context.view.slice;
       CellSilhouette.trace(context, position.x, position.y, position.z);
-      ctx.globalAlpha = onSlice ? 0.5 : 0.28;
+      ctx.globalAlpha = 0.5;
       ctx.fillStyle = Palette.danger;
       ctx.fill();
       ctx.globalAlpha = 1;
       ctx.strokeStyle = Palette.danger;
-      ctx.lineWidth = onSlice ? 1.5 : 1;
+      ctx.lineWidth = 1.5;
       ctx.stroke();
       ctx.lineWidth = 1;
     }

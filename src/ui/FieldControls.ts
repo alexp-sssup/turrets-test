@@ -1,4 +1,3 @@
-import { ViewMode } from "../render/ViewMode";
 import { OVERLAY_COUNT, OverlayMode, overlayName } from "../render/ViewState";
 import { Dom } from "./Dom";
 import { ShellState } from "./ShellState";
@@ -62,9 +61,6 @@ export class FieldControls {
     new InputHint("zoom", "", "wheel to zoom", "pinch to zoom"),
     new InputHint("fit", "", "", "double-tap to fit"),
     new InputHint("overlay", "1–5", "1–5 overlays", "overlay row below"),
-    new InputHint("cross-section", "[ ]", "[ ] cross-section", "slice stepper below"),
-    // Isometric renderer spec 9: one new verb. `[` and `]` move the reach plane, and the
-    // peel follows it rather than sitting beside it (face-placement spec 3.2).
     new InputHint("yaw-left", "q", "q e turn the camera", "compass below"),
     new InputHint("yaw-right", "e", "", ""),
     new InputHint("undo", "z", "", ""),
@@ -132,11 +128,12 @@ export class FieldControls {
   /**
    * The bar itself, in the priority order of 4.1.
    *
-   * The overlay switcher, the cross-section and the transport share one horizontally
-   * scrollable row rather than stacking, and the dev chip rides at its end. Three stacked
-   * rows of 44 px targets is a third of a phone's height, and 4.1 ranks the cross-section
-   * above every one of them: when space runs out it is spent from the bottom of that list
-   * up, and this is what spending it looks like.
+   * The overlay switcher and the transport share one horizontally scrollable row rather than
+   * stacking, and the dev chip rides at its end. Three stacked rows of 44 px targets is a
+   * third of a phone's height, so when space runs out it is spent from the bottom of 4.1's
+   * list up, and this is what spending it looks like. The cross-section cell that used to
+   * sit here is gone with the cross-section itself (no-sections spec 2.5), and its room is
+   * given back to the rows below rather than refilled.
    */
   public static render(state: ShellState): string {
     return (
@@ -146,8 +143,7 @@ export class FieldControls {
       FieldControls.overlayRow(state) +
       FieldControls.transportRow(state) +
       "</div>" +
-      "</div>" +
-      FieldControls.slicePicker(state)
+      "</div>"
     );
   }
 
@@ -200,10 +196,9 @@ export class FieldControls {
     return html;
   }
 
-  /** Transport, cross-section and the editor's undo pair: 6.1's table, minus the keyboard. */
+  /** Transport and the editor's undo pair: 6.1's table, minus the keyboard. */
   private static transportRow(state: ShellState): string {
     let html = '<span class="transport-group">';
-    html += FieldControls.sliceControl(state);
     if (state.inDesign) {
       html +=
         '<button class="field-button" data-action="undo"' +
@@ -282,109 +277,6 @@ export class FieldControls {
     );
   }
 
-  /**
-   * The cross-section control: the per-column strip when it fits, the stepper when it does
-   * not (4.5, 6.2).
-   *
-   * A width question, not a device question, which is why the stepper applies in `Wide` too
-   * and why the caller decides with `useSliceStepper` rather than with the layout mode.
-   */
-  public static sliceControl(state: ShellState): string {
-    if (!state.useSliceStepper) {
-      return FieldControls.sliceStrip(state);
-    }
-    const count = FieldControls.blocksInSlice(state, state.slice);
-    return (
-      '<span class="slice-stepper">' +
-      '<button class="field-button" data-action="slice-step" data-value="-1">◀</button>' +
-      '<button class="slice-readout" data-action="slice-picker">x = ' +
-      state.slice.toString() +
-      " · " +
-      count.toString() +
-      " block" +
-      (count === 1 ? "" : "s") +
-      FieldControls.peelNote(state) +
-      "</button>" +
-      '<button class="field-button" data-action="slice-step" data-value="1">▶</button>' +
-      "</span>"
-    );
-  }
-
-  /**
-   * How many sections the cutaway has taken off the front of the turret (isometric renderer
-   * spec 6).
-   *
-   * A cutaway a tester has not noticed reads as a missing wall, and a tester who thinks they
-   * have lost a wall will go and rebuild one they already have.
-   */
-  public static peelNote(state: ShellState): string {
-    if (state.viewMode !== ViewMode.Iso || !state.peeling || state.peeledSections <= 0) {
-      return "";
-    }
-    return " · " + state.peeledSections.toString() + " peeled";
-  }
-
-  /**
-   * The full picker the stepper's readout opens: every cross-section with its block count.
-   *
-   * 6.2 asks for it by name, and the reason is that the strip's "an empty section reads as
-   * empty" property is the thing the shrink would otherwise cost.
-   */
-  private static slicePicker(state: ShellState): string {
-    if (!state.slicePickerOpen) {
-      return "";
-    }
-    let html = '<div class="slice-picker"><h2>cross-sections</h2><ul>';
-    for (let x = state.sliceMin; x <= state.sliceMax; x++) {
-      const count = FieldControls.blocksInSlice(state, x);
-      html +=
-        '<li class="' +
-        (x === state.slice ? "active" : "") +
-        (count === 0 ? " empty" : "") +
-        '" data-action="slice" data-value="' +
-        x.toString() +
-        '"><span class="mono">x = ' +
-        x.toString() +
-        '</span><span class="dim">' +
-        count.toString() +
-        " block" +
-        (count === 1 ? "" : "s") +
-        "</span></li>";
-    }
-    html += '</ul><button class="field-button" data-action="slice-picker">close</button></div>';
-    return html;
-  }
-
-  /** Today's per-column strip, unchanged. */
-  private static sliceStrip(state: ShellState): string {
-    let html = '<span class="slice-strip"><span class="shell-label">slice x</span>';
-    for (let x = state.sliceMin; x <= state.sliceMax; x++) {
-      const count = FieldControls.blocksInSlice(state, x);
-      html +=
-        '<button class="slice-cell' +
-        (x === state.slice ? " active" : "") +
-        (count === 0 ? " empty" : "") +
-        '" data-action="slice" data-value="' +
-        x.toString() +
-        '" title="' +
-        count.toString() +
-        ' block(s) in this cross-section">' +
-        x.toString() +
-        "</button>";
-    }
-    html +=
-      '<span class="shell-sub">' +
-      Dom.escape(FieldControls.keyFor("cross-section")) +
-      " to move" +
-      Dom.escape(FieldControls.peelNote(state)) +
-      "</span></span>";
-    return html;
-  }
-
-  private static blocksInSlice(state: ShellState, x: number): number {
-    const index = x - state.sliceMin;
-    return index >= 0 && index < state.sliceCounts.length ? state.sliceCounts[index] : 0;
-  }
 
   /**
    * The dev readout, collapsed to one chip (4.2).

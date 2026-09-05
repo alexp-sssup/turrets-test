@@ -29,6 +29,73 @@ function editor(): EditorModel {
   );
 }
 
+describe("EditorModel: digging in and building back (no-sections spec 2.2)", () => {
+  /**
+   * The way to an interior, now that there is no cutaway: erase the wall, do the work, build
+   * the wall back. Both verbs already existed; this pins that the round trip lands on the
+   * design it started from, which is what makes the cross-section unnecessary rather than
+   * merely absent.
+   */
+  it("erases a wall cell, builds behind it, and puts the wall back", () => {
+    const model = editor();
+    const blueprint = model.blueprint();
+    // A block on the surface, and the cell one step in from it along the lane.
+    const wall = blueprint.blockAt(0).position;
+    const startCost = model.cost;
+    const startBlocks = model.blockCount;
+
+    model.selectPalette("erase");
+    assert.equal(model.placeAt(wall, 0), true, "the wall comes out");
+    assert.equal(model.blockCount, startBlocks - 1);
+    assert.ok(model.cost < startCost, "and the bill refunds it");
+
+    // The cell it was hiding is reachable now, because nothing stands in front of it.
+    const behind = new IVec3(wall.x, wall.y + 1, wall.z);
+    const wasThere = model.blueprint().blockCount;
+    model.selectPalette("wood");
+    if (!blueprintHas(model, behind)) {
+      assert.equal(model.placeAt(behind, 0), true, "and something can go in its place");
+      assert.equal(model.blockCount, wasThere + 1);
+      assert.equal(model.placeAt(behind, 0), true);
+      model.selectPalette("erase");
+      assert.equal(model.placeAt(behind, 0), true, "taken back out again");
+      model.selectPalette("wood");
+    }
+
+    // Build the wall back where it was. The trip is undoable one click at a time either way.
+    assert.equal(model.placeAt(wall, 0), true);
+    assert.equal(model.blockCount, startBlocks);
+    assert.equal(blueprintHas(model, wall), true, "the wall is a wall again");
+  });
+
+  it("costs one undo per click, so a dig is never a cliff", () => {
+    const model = editor();
+    const wall = model.blueprint().blockAt(0).position;
+    const startBlocks = model.blockCount;
+
+    model.selectPalette("erase");
+    model.placeAt(wall, 0);
+    model.selectPalette("wood");
+    model.placeAt(wall, 0);
+    assert.equal(model.blockCount, startBlocks);
+
+    assert.equal(model.undo(0), true);
+    assert.equal(model.blockCount, startBlocks - 1, "the rebuild comes off first");
+    assert.equal(model.undo(0), true);
+    assert.equal(model.blockCount, startBlocks, "and then the erase");
+  });
+});
+
+function blueprintHas(model: EditorModel, cell: IVec3): boolean {
+  const blueprint = model.blueprint();
+  for (let i = 0; i < blueprint.blockCount; i++) {
+    if (blueprint.blockAt(i).position.equals(cell)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 describe("EditorModel", () => {
   it("updates the bill of materials on every placement, not at commit", () => {
     const model = editor();

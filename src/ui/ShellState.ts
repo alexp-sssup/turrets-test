@@ -1,4 +1,3 @@
-import { ViewMode } from "../render/ViewMode";
 import { OverlayMode } from "../render/ViewState";
 import { LayoutMode } from "./LayoutMode";
 
@@ -23,19 +22,8 @@ export class ShellState {
   /** Load factor to show. The editor's before a run starts, the frame's once it has. */
   public margin: number;
   public overlay: OverlayMode;
-  /** Flat or 2.5D (depth view spec 5). Flat is what a session opens in. */
-  public viewMode: ViewMode;
   /** Which quarter turn the camera is at, for the compass (isometric renderer spec 9). */
   public yaw: number;
-  /** Whether a cutaway is engaged, so the readout can name it (spec 6). */
-  public peeling: boolean;
-  /** Sections standing between the viewer and the reach plane, cut away by the peel rule. */
-  public peeledSections: number;
-  public slice: number;
-  public sliceMin: number;
-  public sliceMax: number;
-  /** Blocks in each cross-section from `sliceMin` up, so empty sections read as empty. */
-  public sliceCounts: readonly number[];
   public sessionId: string;
   public attemptNumber: number;
   /** Solver milliseconds: the last one and the p95, per UI spec 6. */
@@ -60,8 +48,6 @@ export class ShellState {
   /** `Compact` only: the overlay switcher and the cross-section move to the control bar. */
   public compact: boolean;
   /** 4.5: a width question, not a device question, so it applies in `Wide` too. */
-  public useSliceStepper: boolean;
-  public slicePickerOpen: boolean;
   /** The dev chip's expanded state (4.2). The chip itself is never off. */
   public devExpanded: boolean;
   /** What the renderer gave up to hold the budget, if anything (iso renderer spec 8). */
@@ -90,14 +76,7 @@ export class ShellState {
     this.crewRunners = 0;
     this.margin = Number.POSITIVE_INFINITY;
     this.overlay = OverlayMode.Material;
-    this.viewMode = ViewMode.Iso;
     this.yaw = 0;
-    this.peeling = false;
-    this.peeledSections = 0;
-    this.slice = 0;
-    this.sliceMin = 0;
-    this.sliceMax = 0;
-    this.sliceCounts = [];
     this.sessionId = "";
     this.attemptNumber = 1;
     this.solverMs = 0;
@@ -114,8 +93,6 @@ export class ShellState {
     this.coarse = false;
     this.condensed = false;
     this.compact = false;
-    this.useSliceStepper = false;
-    this.slicePickerOpen = false;
     this.devExpanded = false;
     this.renderDetail = "full";
     this.inDesign = false;

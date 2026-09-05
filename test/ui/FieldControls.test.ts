@@ -1,21 +1,11 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
-import { ViewMode } from "../../src/render/ViewMode";
 import { OverlayMode } from "../../src/render/ViewState";
 import { FieldControls } from "../../src/ui/FieldControls";
 import { ShellState } from "../../src/ui/ShellState";
 
-function stateWithSlices(count: number, stepper: boolean): ShellState {
+function stressState(): ShellState {
   const state = new ShellState();
-  const counts: number[] = [];
-  for (let i = 0; i < count; i++) {
-    counts.push(i === 1 ? 0 : 12);
-  }
-  state.sliceMin = 0;
-  state.sliceMax = count - 1;
-  state.sliceCounts = counts;
-  state.slice = 0;
-  state.useSliceStepper = stepper;
   state.overlay = OverlayMode.Stress;
   return state;
 }
@@ -33,8 +23,11 @@ describe("FieldControls", () => {
     assert.ok(fine.indexOf("click a face to build on it") >= 0);
     assert.ok(fine.indexOf("wheel to zoom") >= 0);
     // The key it names is drawn as a key cap, and only because the table has that binding.
-    assert.ok(fine.indexOf("<kbd>[ ]</kbd> cross-section") >= 0);
+    assert.ok(fine.indexOf("<kbd>q</kbd> e turn the camera") >= 0);
     assert.equal(fine.indexOf("<kbd>wheel"), -1);
+    // No-sections spec 2.5: `[` and `]` are unbound, so the caption cannot offer them.
+    assert.equal(fine.indexOf("[ ]"), -1);
+    assert.equal(coarse.indexOf("slice"), -1);
 
     // 6.3: a finger has no hover and no alt key, so the coarse caption says neither.
     assert.equal(coarse.indexOf("alt-click"), -1);
@@ -88,7 +81,6 @@ describe("FieldControls", () => {
    */
   it("keeps every keyboard binding in the table on a coarse pointer (mobile UI spec 3.2)", () => {
     assert.equal(FieldControls.keyFor("overlay"), "1–5");
-    assert.equal(FieldControls.keyFor("cross-section"), "[ ]");
     assert.equal(FieldControls.keyFor("undo"), "z");
     assert.equal(FieldControls.keyFor("redo"), "y");
     assert.equal(FieldControls.keyFor("pause"), "space");
@@ -103,7 +95,7 @@ describe("FieldControls", () => {
    * that is *on* rather than the one a press would reach.
    */
   it("puts the compass and both quarter turns on screen", () => {
-    const state = stateWithSlices(4, false);
+    const state = stressState();
     const html = FieldControls.render(state);
     assert.ok(html.indexOf('data-action="yaw" data-value="1"') >= 0);
     assert.ok(html.indexOf('data-action="yaw" data-value="-1"') >= 0);
@@ -129,68 +121,9 @@ describe("FieldControls", () => {
     assert.equal(FieldControls.caption(true).indexOf("<kbd>"), -1);
   });
 
-  /**
-   * Isometric renderer spec 6: a cutaway a tester has not noticed reads as a missing wall,
-   * so the section readout says how many sections the peel has taken off the front.
-   */
-  it("names the peel in the section readout, and only when something is peeled", () => {
-    const stepper = stateWithSlices(48, true);
-    stepper.slice = 3;
-    stepper.peeling = false;
-    stepper.peeledSections = 3;
-    assert.equal(FieldControls.sliceControl(stepper).indexOf("peeled"), -1, "solid turret, no note");
-
-    stepper.peeling = true;
-    assert.ok(FieldControls.sliceControl(stepper).indexOf("x = 3 · 12 blocks · 3 peeled") >= 0);
-
-    // Nothing in front of the reach plane is nothing to say.
-    stepper.peeledSections = 0;
-    assert.equal(FieldControls.sliceControl(stepper).indexOf("peeled"), -1);
-
-    // The flat dev view has no peel at all.
-    stepper.peeledSections = 2;
-    stepper.viewMode = ViewMode.Flat;
-    assert.equal(FieldControls.sliceControl(stepper).indexOf("peeled"), -1);
-
-    // The strip carries the same note, from the same helper.
-    const strip = stateWithSlices(4, false);
-    strip.peeling = true;
-    strip.peeledSections = 2;
-    assert.ok(FieldControls.sliceControl(strip).indexOf("2 peeled") >= 0);
-  });
-
-  /** 4.5: the stepper replaces the strip on a width question, not a device question. */
-  it("draws the per-column strip while it fits and the stepper when it does not", () => {
-    const strip = FieldControls.sliceControl(stateWithSlices(4, false));
-    assert.ok(strip.indexOf("slice-strip") >= 0);
-    assert.equal(strip.indexOf("slice-stepper"), -1);
-
-    const stepper = FieldControls.sliceControl(stateWithSlices(48, true));
-    assert.ok(stepper.indexOf("slice-stepper") >= 0);
-    assert.ok(stepper.indexOf('data-action="slice-step" data-value="-1"') >= 0);
-    assert.ok(stepper.indexOf('data-action="slice-step" data-value="1"') >= 0);
-    assert.ok(stepper.indexOf("x = 0 · 12 blocks") >= 0);
-  });
-
-  /**
-   * 6.2: the readout opens a full picker listing every cross-section with its block count,
-   * so the strip's "an empty section reads as empty" property survives the shrink.
-   */
-  it("lists every cross-section with its block count in the picker, empties marked", () => {
-    const state = stateWithSlices(4, true);
-    state.slicePickerOpen = true;
-    const html = FieldControls.render(state);
-
-    assert.ok(html.indexOf("slice-picker") >= 0);
-    assert.ok(html.indexOf('data-action="slice" data-value="3"') >= 0);
-    // Slice 1 is the empty one, and it is listed rather than omitted.
-    assert.ok(html.indexOf('class=" empty" data-action="slice" data-value="1"') >= 0);
-    assert.ok(html.indexOf("0 blocks") >= 0);
-  });
-
   /** 6.1: every verb reachable without a keyboard. */
   it("puts the transport, undo/redo and the overlays on screen (mobile UI spec 6.1)", () => {
-    const state = stateWithSlices(48, true);
+    const state = stressState();
     state.inDesign = true;
     state.canUndo = true;
     state.attemptOpen = true;
@@ -212,7 +145,7 @@ describe("FieldControls", () => {
 
   /** 8.4: the screen's one action is reachable with the panel sheet collapsed. */
   it("keeps the screen's primary action out of the sheet (mobile UI spec 8.4)", () => {
-    const state = stateWithSlices(4, false);
+    const state = stressState();
     state.compact = true;
     state.primaryLabel = "start wave 1";
     state.primaryAction = "start";
@@ -233,7 +166,7 @@ describe("FieldControls", () => {
    * numbers, which is stronger on a phone, not weaker.
    */
   it("always shows the dev chip, and shows the worse of the two p95s", () => {
-    const state = stateWithSlices(4, false);
+    const state = stressState();
     state.solverP95 = 41.5;
     state.renderP95 = 9;
     assert.ok(FieldControls.render(state).indexOf("solver p95 41.5 ms") >= 0);
@@ -245,7 +178,7 @@ describe("FieldControls", () => {
 
   /** 8.3: the solver gets 32 ms on a phone against the desktop's 16, and render gets 16. */
   it("warns against the mobile budget on a coarse pointer (mobile UI spec 8.3)", () => {
-    const state = stateWithSlices(4, false);
+    const state = stressState();
     state.solverP95 = 24;
     state.renderP95 = 1;
 

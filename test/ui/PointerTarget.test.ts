@@ -33,8 +33,6 @@ class Cells implements CellPresence {
 
 const bounds = new GridBounds(new IVec3(-2, 0, -6), new IVec3(12, 10, 16));
 const pad = new PadSurface(0, 0, 2, -4, 0);
-/** A cross-section chosen so the block below is nowhere near it. */
-const SECTION: number = 3;
 
 /** Where the ray through the centre of a cell's top face crosses the screen. */
 function overTopOf(iso: IsoProjection, cell: IVec3): IVec3 {
@@ -43,12 +41,6 @@ function overTopOf(iso: IsoProjection, cell: IVec3): IVec3 {
     Math.round(iso.screenY(cell.x + 0.5, cell.y + 1, cell.z + 0.5)),
     0
   );
-}
-
-/** The cell of the plane under a screen point (isometric renderer spec 5.1). */
-function planeCellAt(iso: IsoProjection, screenX: number, screenY: number): IVec3 {
-  const world = iso.inSection(screenX, screenY, SECTION);
-  return new IVec3(SECTION, Math.floor(world.y), Math.floor(world.z));
 }
 
 /** The block under the pointer, as `App` resolves it. */
@@ -68,24 +60,7 @@ function placementAt(
 }
 
 describe("PointerTarget: what the pointer addresses (pointing spec 2)", () => {
-  // The bug the pointing document was written for. If these two ever agree the rest of the
-  // suite proves nothing, so the disagreement is asserted before it is resolved.
-  it("a pick and a plane inverse disagree over a block outside the section", () => {
-    for (let id = 0; id < ViewYaw.COUNT; id++) {
-      const iso = new IsoProjection(ViewYaw.of(id), 20, 400, 300);
-      const block = new IVec3(0, 1, -2);
-      const at = overTopOf(iso, block);
-      const picked = CellPick.pick(iso, new Cells([block]), bounds, at.x, at.y);
-
-      assert.notEqual(picked, null, "yaw " + id.toString() + " sees the block");
-      assert.equal((picked as FaceHit).cell.equals(block), true);
-      const plane = planeCellAt(iso, at.x, at.y);
-      assert.equal(plane.x, SECTION);
-      assert.equal(plane.equals(block), false, "yaw " + id.toString() + " resolves elsewhere");
-    }
-  });
-
-  it("2.1: an inspect names the block under the pointer, not a plane cell", () => {
+  it("2.1: an inspect names the block under the pointer", () => {
     for (let id = 0; id < ViewYaw.COUNT; id++) {
       const iso = new IsoProjection(ViewYaw.of(id), 20, 400, 300);
       const block = new IVec3(0, 1, -2);

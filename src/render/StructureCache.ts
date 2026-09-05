@@ -1,12 +1,11 @@
 import { FieldFrame } from "./FieldFrame";
 import { DrawContext } from "./Layer";
-import { PeelPlane } from "./PeelPlane";
 import { ViewState } from "./ViewState";
 
 /**
  * The static pass, kept between frames (isometric renderer spec 8).
  *
- * The ground, the pad, the reach plane and the structure are expensive to build and change
+ * The ground, the pad and the structure are expensive to build and change
  * only when something a tester did changed them, so they are composited once into an
  * offscreen canvas and blitted after that. In the editor -- where a tester spends most of
  * their attention, and where the solver is already chewing a re-solve -- a frame becomes one
@@ -57,11 +56,10 @@ export class StructureCache {
    * Hover, selection and the joint callout are absent on purpose -- they are marks, drawn
    * live after the blit (spec 4.1), so they must not invalidate anything.
    */
-  public static signatureOf(context: DrawContext, peel: PeelPlane): number {
+  public static signatureOf(context: DrawContext): number {
     return StructureCache.signature(
       context.view,
       context.frame,
-      peel,
       context.projection.widthPx,
       context.projection.heightPx,
       context.detail.level
@@ -75,7 +73,6 @@ export class StructureCache {
   public static signature(
     view: ViewState,
     frame: FieldFrame,
-    peel: PeelPlane,
     widthPx: number,
     heightPx: number,
     detail: number
@@ -85,9 +82,6 @@ export class StructureCache {
     hash = StructureCache.mix(hash, Math.round(view.panX));
     hash = StructureCache.mix(hash, Math.round(view.panY));
     hash = StructureCache.mix(hash, view.yaw.id);
-    hash = StructureCache.mix(hash, view.mode as number);
-    hash = StructureCache.mix(hash, view.slice);
-    hash = StructureCache.mix(hash, peel.peeledCount);
     hash = StructureCache.mix(hash, Math.round(widthPx));
     hash = StructureCache.mix(hash, Math.round(heightPx));
     hash = StructureCache.mix(hash, frame.blockCount);

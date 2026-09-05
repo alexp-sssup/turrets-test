@@ -8,7 +8,6 @@ import { FaceHit } from "../../src/render/FaceHit";
 import { FieldDesign } from "../../src/render/FieldDesign";
 import { IsoProjection } from "../../src/render/IsoProjection";
 import { Projection } from "../../src/render/Projection";
-import { ViewMode } from "../../src/render/ViewMode";
 import { ViewState } from "../../src/render/ViewState";
 import { ViewYaw } from "../../src/render/ViewYaw";
 import { ZoomLadder } from "../../src/render/ZoomLadder";
@@ -141,16 +140,17 @@ describe("IsoProjection: the yaw table (isometric renderer spec 2.2)", () => {
     assert.equal(ViewYaw.of(2).turned(4).id, 2);
   });
 
-  it("flips which side of the reach plane is peeled between yaw 1 and yaw 2 (spec 2.2)", () => {
-    assert.equal(ViewYaw.of(0).isInFront(1, 3), true);
-    assert.equal(ViewYaw.of(1).isInFront(1, 3), true);
-    assert.equal(ViewYaw.of(2).isInFront(1, 3), false);
-    assert.equal(ViewYaw.of(2).isInFront(5, 3), true);
-    assert.equal(ViewYaw.of(3).isInFront(5, 3), true);
+  it("puts the camera on the other side of the turret between yaw 1 and yaw 2 (spec 2.2)", () => {
+    // `rayStepX` is the sign the section index moves in one step away from the camera, and
+    // it is the only thing left that remembers which side the camera is on.
+    assert.equal(ViewYaw.of(0).rayStepX, -1);
+    assert.equal(ViewYaw.of(1).rayStepX, -1);
+    assert.equal(ViewYaw.of(2).rayStepX, 1);
+    assert.equal(ViewYaw.of(3).rayStepX, 1);
   });
 });
 
-describe("IsoProjection: the two inverses (isometric renderer spec 5.1, 5.3)", () => {
+describe("IsoProjection: the plane inverse (isometric renderer spec 5.1)", () => {
   it("is the exact left inverse of the projection on a horizontal plane, at every rung", () => {
     for (let rung = 0; rung < ZoomLadder.RUNGS.length; rung++) {
       for (let id = 0; id < ViewYaw.COUNT; id++) {
@@ -168,40 +168,12 @@ describe("IsoProjection: the two inverses (isometric renderer spec 5.1, 5.3)", (
     }
   });
 
-  it("is the exact left inverse in a vertical cross-section too, at every yaw", () => {
-    for (let id = 0; id < ViewYaw.COUNT; id++) {
-      const iso = new IsoProjection(ViewYaw.of(id), 24, -9, 45);
-      for (let y = -3; y <= 5; y++) {
-        for (let z = -4; z <= 4; z++) {
-          const section = 2;
-          const world = iso.inSection(iso.screenX(section, z), iso.screenY(section, y, z), section);
-          assert.equal(world.x, section);
-          assert.equal(approxEqual(world.y, y, 1e-9), true);
-          assert.equal(approxEqual(world.z, z, 1e-9), true);
-        }
-      }
-    }
-  });
-
-  it("resolves a screen point to one unambiguous cell of a section (face-placement spec 2.7)", () => {
-    const scene = design();
-    const view = new ViewState(2);
-    Projection.fit(scene, view, 900, 600);
-    const projection = new Projection(scene, view, 900, 600);
-    const cell = projection.cellAt(
-      projection.screenX(2, 4) + 2,
-      projection.screenY(2, 1, 4) - 2
-    );
-    assert.equal(cell.x, 2);
-    assert.equal(cell.y, 1);
-    assert.equal(cell.z, 4);
-  });
 });
 
 describe("Projection.fit (isometric renderer spec 2.4)", () => {
   it("chooses a rung of the ladder and puts the pad's ground plane on the anchor", () => {
     const scene = design();
-    const view = new ViewState(scene.pad.minX);
+    const view = new ViewState();
     Projection.fit(scene, view, 900, 600);
     assert.equal(ZoomLadder.RUNGS.indexOf(view.scale) >= 0, true);
     assert.equal(Number.isInteger(view.panX), true);
@@ -217,7 +189,7 @@ describe("Projection.fit (isometric renderer spec 2.4)", () => {
     const scene = design();
     const bounds = scene.viewBounds;
     for (let id = 0; id < ViewYaw.COUNT; id++) {
-      const view = new ViewState(scene.pad.minX);
+      const view = new ViewState();
       view.yaw = ViewYaw.of(id);
       Projection.fit(scene, view, 900, 600);
       const projection = new Projection(scene, view, 900, 600);
@@ -236,15 +208,14 @@ describe("Projection.fit (isometric renderer spec 2.4)", () => {
     }
   });
 
-  it("frames the flat dev view the way it always did (spec 9)", () => {
+  it("gives every section its own place on screen (spec 2.1)", () => {
+    // The one thing the flat dev view could never do, and the reason it is gone with the
+    // cross-section it drew (no-sections spec 2.1).
     const scene = design();
-    const view = new ViewState(2);
-    view.mode = ViewMode.Flat;
+    const view = new ViewState();
     Projection.fit(scene, view, 900, 600);
     const projection = new Projection(scene, view, 900, 600);
-    // Sections coincide: x has no place on screen in that projection.
-    assert.equal(projection.screenX(0, 4), projection.screenX(4, 4));
-    assert.equal(projection.screenY(0, 1, 4), projection.screenY(4, 1, 9));
+    assert.notEqual(projection.screenX(0, 4), projection.screenX(4, 4));
   });
 });
 
@@ -302,7 +273,7 @@ describe("Projection: where a placement lands (face-placement spec 2)", () => {
   it("2.2: a click on the empty pad places the cell resting on it", () => {
     const scene = design();
     const pad = scene.pad;
-    const view = new ViewState(scene.frontSlice(ViewYaw.initial));
+    const view = new ViewState();
     const projection = fitted(scene, view);
     const empty = new Cells([]);
     const bounds: GridBounds = scene.viewBounds;
@@ -320,7 +291,7 @@ describe("Projection: where a placement lands (face-placement spec 2)", () => {
   it("2.1: a click on a block's top face places the cell above it", () => {
     const scene = design();
     const pad = scene.pad;
-    const view = new ViewState(scene.frontSlice(ViewYaw.initial));
+    const view = new ViewState();
     const projection = fitted(scene, view);
     const standing = new IVec3(pad.minX, pad.level, pad.minZ);
     const cells = new Cells([standing]);
@@ -337,19 +308,97 @@ describe("Projection: where a placement lands (face-placement spec 2)", () => {
     );
   });
 
-  it("2.7: the flat dev view keeps the plane rule, faces and pad and all", () => {
+});
+
+describe("Projection: a placement can never collide (no-sections spec 2.3)", () => {
+  /** A hand-written set of cells, the same shape `CellPick`'s own suite uses. */
+  class Cells implements CellPresence {
+    private readonly filled: readonly string[];
+
+    public constructor(filled: readonly string[]) {
+      this.filled = filled;
+    }
+
+    public static ofBlueprint(scene: FieldDesign): Cells {
+      const keys: string[] = [];
+      const blueprint = scene.blueprint;
+      for (let i = 0; i < blueprint.blockCount; i++) {
+        const cell = blueprint.blockAt(i).position;
+        keys.push(Cells.key(cell.x, cell.y, cell.z));
+      }
+      return new Cells(keys);
+    }
+
+    private static key(x: number, y: number, z: number): string {
+      return x.toString() + "," + y.toString() + "," + z.toString();
+    }
+
+    public isSolid(x: number, y: number, z: number): boolean {
+      return this.filled.indexOf(Cells.key(x, y, z)) >= 0;
+    }
+  }
+
+  /**
+   * The theorem, asserted rather than assumed.
+   *
+   * > The ray enters a block through the face it last crossed, so the cell across that face
+   * > is the cell the ray visited immediately before -- and the traversal only got there by
+   * > finding that cell empty.
+   *
+   * Swept over the whole canvas at every yaw, on a worked example: if a single screen point
+   * resolved onto a block, the guard in `PlacementRule` would be live and the proof wrong.
+   */
+  it("never targets an occupied cell, over every screen point and every yaw", () => {
     const scene = design();
-    const view = new ViewState(2);
-    view.mode = ViewMode.Flat;
-    const projection = fitted(scene, view);
-    const cells = new Cells([]);
-    const screenX = projection.screenX(2, 4) + 2;
-    const screenY = projection.screenY(2, 1, 4) - 2;
-    const target = projection.placementAt(null, cells, screenX, screenY);
-    assert.notEqual(target, null);
-    assert.equal((target as IVec3).equals(projection.cellAt(screenX, screenY)), true);
-    assert.equal((target as IVec3).x, 2, "in the active section and nowhere else");
-    // And there is no pad face to fall back on there either: 2.2 is an isometric rule.
-    assert.equal(projection.groundAt(screenX, screenY), null);
+    const cells = Cells.ofBlueprint(scene);
+    let hits = 0;
+    for (let id = 0; id < ViewYaw.COUNT; id++) {
+      const view = new ViewState();
+      view.yaw = ViewYaw.of(id);
+      Projection.fit(scene, view, 900, 600);
+      const projection = new Projection(scene, view, 900, 600);
+      for (let sx = 0; sx < 900; sx += 7) {
+        for (let sy = 0; sy < 600; sy += 7) {
+          const picked = projection.pick(cells, scene.viewBounds, sx, sy);
+          const target = projection.placementAt(picked, cells, sx, sy);
+          if (target === null) {
+            continue;
+          }
+          hits++;
+          assert.equal(
+            cells.isSolid(target.x, target.y, target.z),
+            false,
+            "yaw " + id.toString() + " at " + sx.toString() + "," + sy.toString()
+          );
+        }
+      }
+    }
+    // The sweep is worth nothing if it never landed on the turret.
+    assert.ok(hits > 200, "the sweep found somewhere to build " + hits.toString() + " times");
+  });
+
+  it("a placement against a block is always the cell the ray came through", () => {
+    const scene = design();
+    const cells = Cells.ofBlueprint(scene);
+    for (let id = 0; id < ViewYaw.COUNT; id++) {
+      const view = new ViewState();
+      view.yaw = ViewYaw.of(id);
+      Projection.fit(scene, view, 900, 600);
+      const projection = new Projection(scene, view, 900, 600);
+      let checked = 0;
+      for (let sx = 0; sx < 900; sx += 11) {
+        for (let sy = 0; sy < 600; sy += 11) {
+          const picked = projection.pick(cells, scene.viewBounds, sx, sy);
+          if (picked === null) {
+            continue;
+          }
+          const target = projection.placementAt(picked, cells, sx, sy);
+          assert.notEqual(target, null, "a face always has a cell across it");
+          assert.equal((target as IVec3).equals(picked.adjacent()), true);
+          checked++;
+        }
+      }
+      assert.ok(checked > 50, "yaw " + id.toString() + " saw the turret");
+    }
   });
 });

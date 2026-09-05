@@ -3,7 +3,6 @@ import { CellSilhouette } from "../CellSilhouette";
 import { FieldComposition } from "../FieldComposition";
 import { DrawContext, Layer } from "../Layer";
 import { Palette } from "../Palette";
-import { PeelPlane } from "../PeelPlane";
 import { ScenePainter } from "../ScenePainter";
 import { StructureCache } from "../StructureCache";
 import { FieldFrame } from "../FieldFrame";
@@ -14,14 +13,14 @@ import { FieldFrame } from "../FieldFrame";
  *
  * Three passes, in this order and for this reason:
  *
- * 1. **The scene** -- ground, pad, reach plane, range marker. Nothing in it can occlude a
+ * 1. **The scene** -- ground, pad, range marker. Nothing in it can occlude a
  *    voxel, so it goes down first and never enters the sort.
  * 2. **The composition** -- every voxel, actor, shadow and round in one back-to-front pass
- *    (`FieldComposition`). Cells outside the reach plane are never hidden: a tester needs to
+ *    (`FieldComposition`). Nothing is cut away and nothing is dimmed: a tester needs to
  *    know the wall they are looking at has three more of itself behind it, and hiding them
- *    would make a five-wide turret look one-wide. What that costs differs by projection --
- *    the isometric view gives every section its own place and applies the peel rule of spec
- *    6, and the flat dev view ghosts them all into one place.
+ *    would make a five-wide turret look one-wide. The projection gives every section
+ *    its own place, and a cell hidden behind its own three camera-facing neighbours is not
+ *    drawn at all (spec 3.3).
  * 3. **The marks** -- hover, selection, the first-failed-joint callout. Marks draw after the
  *    sorted list and are occluded by nothing (spec 4.1): a mark hidden behind the geometry it
  *    describes is a measurement lost, and spec 1.1 is the measurement.
@@ -37,25 +36,17 @@ export class BaseLayer implements Layer {
   }
 
   public draw(context: DrawContext): void {
-    const design = context.frame.design;
-    const peel = new PeelPlane(
-      design.sliceMin,
-      design.sliceMax,
-      context.view.slice,
-      context.view.yaw,
-      context.view.mode
-    );
     // Spec 8: the static pass is composited once and blitted after that, for the frames it
     // is sound to cache -- which is every frame with nothing moving in it. A live wave pays
     // the full sort, because the actors are inside it and not above it.
-    const signature = StructureCache.signatureOf(context, peel);
+    const signature = StructureCache.signatureOf(context);
     if (this.cache.canReuse(context, signature)) {
       this.cache.blit(context);
     } else {
       const capture = this.cache.begin(context, signature);
       const into = capture === null ? context : capture;
-      ScenePainter.paint(into, peel);
-      this.composition.draw(into, peel);
+      ScenePainter.paint(into);
+      this.composition.draw(into);
       if (capture !== null) {
         this.cache.end();
         this.cache.blit(context);

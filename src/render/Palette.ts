@@ -43,7 +43,6 @@ export class Palette {
   public static readonly padLine: string = "#2b3542";
   public static readonly grid: string = "#1a1f28";
   public static readonly sky: string = "#0d1015";
-  public static readonly ghost: string = "rgba(150,168,190,0.14)";
   public static readonly text: string = "#dbe4f0";
   public static readonly textDim: string = "#8b98ab";
   public static readonly accent: string = "#5fb2ff";
@@ -89,10 +88,6 @@ export class Palette {
   /** Contact shadows, which spec 7.3 makes mandatory: without them an actor floats. */
   public static readonly shadow: string = "rgba(6,8,11,0.45)";
   /** The reach plane, drawn as the face of the cutaway (face-placement spec 3.4). */
-  public static readonly reachPlane: string = "rgba(95,178,255,0.06)";
-  public static readonly reachPlaneLine: string = "rgba(95,178,255,0.22)";
-  /** The outline a peeled section is drawn with: the wall cut away in front of the plane. */
-  public static readonly peelEdge: string = "#9fb0c6";
   /** The darker edge stroked along a silhouette or a crease (spec 3.1). */
   public static readonly voxelEdge: string = "rgba(9,11,15,0.55)";
 
@@ -115,15 +110,8 @@ export class Palette {
    * x-ray mode over. Hue stays free for the things that encode on it, so a wood cube and a
    * stone cube stay distinguishable in greyscale at every depth.
    */
-  public static faceFill(material: MaterialId, shade: number, dim: number): string {
-    return Palette.dimmed(Palette.materialFill(material), shade, dim);
-  }
-
-  public static dimmed(hex: string, shade: number, dim: number): string {
-    const red = Palette.toBackground(Palette.channel(hex, 1, shade), 1, dim);
-    const green = Palette.toBackground(Palette.channel(hex, 3, shade), 3, dim);
-    const blue = Palette.toBackground(Palette.channel(hex, 5, shade), 5, dim);
-    return Palette.rgb(red, green, blue);
+  public static faceFill(material: MaterialId, shade: number): string {
+    return Palette.shade(Palette.materialFill(material), shade);
   }
 
   private static rgb(red: number, green: number, blue: number): string {

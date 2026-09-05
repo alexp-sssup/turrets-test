@@ -7,7 +7,6 @@ import { WeaponClass, WeaponClassId, WeaponTable } from "../materials/WeaponTabl
 import { Blueprint } from "../blueprint/Blueprint";
 import { Arena } from "../sim/Arena";
 import { PadSurface } from "../structure/SupportSurface";
-import { ViewYaw } from "./ViewYaw";
 
 /**
  * The part of a scene that does not change tick to tick: the design, the pad, the lane and
@@ -60,65 +59,6 @@ export class FieldDesign {
     );
   }
 
-  /**
-   * Cross-sections worth drawing: the design's own width, widened to the pad so a tester
-   * can lay a new wall outside what they have already built.
-   */
-  public get sliceMin(): number {
-    const design = this.blueprint.bounds.min.x;
-    return design < this.pad.minX ? design : this.pad.minX;
-  }
-
-  public get sliceMax(): number {
-    const design = this.blueprint.bounds.min.x + this.blueprint.bounds.size.x - 1;
-    return design > this.pad.maxX ? design : this.pad.maxX;
-  }
-
-  /**
-   * The section nearest the camera, and therefore where the reach plane rests when nothing
-   * is peeled (face-placement spec 3.3).
-   *
-   * A fact about the yaw and not about the design: `nearerSide` is the sign the section index
-   * moves in one step toward the camera (isometric renderer spec 2.2), so a quarter turn puts
-   * this at the other end of the turret -- which is why a quarter turn resets the plane.
-   */
-  public frontSlice(yaw: ViewYaw): number {
-    return yaw.nearerSide < 0 ? this.sliceMin : this.sliceMax;
-  }
-
-  public clampSlice(x: number): number {
-    if (x < this.sliceMin) {
-      return this.sliceMin;
-    }
-    if (x > this.sliceMax) {
-      return this.sliceMax;
-    }
-    return x;
-  }
-
-  /** Blocks in one cross-section, in canonical order. Used by the slice strip readout. */
-  public blocksInSlice(x: number): number[] {
-    const found: number[] = [];
-    for (let i = 0; i < this.blueprint.blockCount; i++) {
-      if (this.blueprint.blockAt(i).position.x === x) {
-        found.push(i);
-      }
-    }
-    return found;
-  }
-
-  /**
-   * The visible world box.
-   *
-   * Wide enough on the -z side to hold an attacker at the edge of gun range, because "my
-   * gun is silent" and "nothing is in range yet" have to be distinguishable at a glance --
-   * but no wider. The lane is forty voxels long and showing all of it would shrink the
-   * turret to nothing for the sake of a walking dot; attackers still outside the frame get
-   * an edge marker instead (`ActorLayer`).
-   *
-   * Vertically it is the design plus two voxels of headroom. The camera has nothing to
-   * teach, so it should not ask a tester to pan to find their own roof.
-   */
   private static frame(blueprint: Blueprint, pad: PadSurface, gunRange: number): GridBounds {
     const design = blueprint.bounds;
     const minX = design.min.x < pad.minX ? design.min.x : pad.minX;

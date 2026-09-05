@@ -7,7 +7,6 @@ import { FieldDesign } from "./FieldDesign";
 import { GroundPick } from "./GroundPick";
 import { IsoProjection } from "./IsoProjection";
 import { PlacementRule } from "./PlacementRule";
-import { ViewMode } from "./ViewMode";
 import { ViewState } from "./ViewState";
 import { ZoomLadder } from "./ZoomLadder";
 
@@ -19,11 +18,6 @@ import { ZoomLadder } from "./ZoomLadder";
  * what a layer holds: it knows the design, the viewport and the view state, it frames the
  * scene, and it answers the two questions every layer asks -- where on screen is this world
  * point, and which cell is under this screen point.
- *
- * The flat side-on cross-section survives here as the developer diagnostic of spec 9, and it
- * survives *inside* this class rather than beside it: a layer never branches on the mode, so
- * no overlay can be projection-specific (spec 10.1). In that mode the x argument is ignored
- * and every section lands in the same place, which is exactly what the flat view is.
  *
  * Screen y depends on all three world coordinates in isometric, which is why `screenY` takes
  * z as well. That is the one signature change the projection forces on every layer, and it
@@ -50,67 +44,17 @@ export class Projection {
     return this.view.scale;
   }
 
-  public get mode(): ViewMode {
-    return this.view.mode;
-  }
-
-  public get isIso(): boolean {
-    return this.view.mode === ViewMode.Iso;
-  }
-
-  /** The reach plane: the nearest addressable section (face-placement spec 3.1, spec 6). */
-  public get section(): number {
-    return this.view.slice;
-  }
-
   public screenX(x: number, z: number): number {
-    if (this.isIso) {
-      return this.iso.screenX(x, z);
-    }
-    return (z - this.design.viewBounds.min.z) * this.view.scale + this.view.panX;
+    return this.iso.screenX(x, z);
   }
 
   public screenY(x: number, y: number, z: number): number {
-    if (this.isIso) {
-      return this.iso.screenY(x, y, z);
-    }
-    const bounds = this.design.viewBounds;
-    const top = bounds.min.y + bounds.size.y;
-    return (top - y - 1) * this.view.scale + this.view.panY;
+    return this.iso.screenY(x, y, z);
   }
 
-  /**
-   * Where a world point sorts in the back-to-front pass (isometric renderer spec 4).
-   *
-   * The flat dev view has no depth to order, but it does have one ordering rule -- the
-   * active section draws *last*, so the ghosts stay behind it -- and expressing that as a
-   * two-valued key is what lets one composition serve both projections (spec 9).
-   */
+  /** Where a world point sorts in the back-to-front pass (isometric renderer spec 4). */
   public depthKey(x: number, y: number, z: number): number {
-    if (this.isIso) {
-      return this.iso.depthKey(x, y, z);
-    }
-    return x === this.view.slice ? 1 : 0;
-  }
-
-  /**
-   * The cell of the reach plane under a screen point.
-   *
-   * This was where every placement landed (spec 5.3) and is not any more: face-placement
-   * spec 2.1 builds against the face a click was aimed at. What is left for it is the flat
-   * developer view of spec 9, which has no faces to aim at and keeps the plane rule
-   * (face-placement spec 2.7).
-   */
-  public cellAt(screenX: number, screenY: number): IVec3 {
-    if (!this.isIso) {
-      const bounds = this.design.viewBounds;
-      const top = bounds.min.y + bounds.size.y;
-      const z = (screenX - this.view.panX) / this.view.scale + bounds.min.z;
-      const y = top - 1 - (screenY - this.view.panY) / this.view.scale;
-      return new IVec3(this.view.slice, Math.round(y), Math.round(z));
-    }
-    const world = this.iso.inSection(screenX, screenY, this.view.slice);
-    return new IVec3(this.view.slice, Math.floor(world.y), Math.floor(world.z));
+    return this.iso.depthKey(x, y, z);
   }
 
   /**
@@ -126,18 +70,11 @@ export class Projection {
     screenX: number,
     screenY: number
   ): FaceHit | null {
-    if (!this.isIso) {
-      const cell = this.cellAt(screenX, screenY);
-      return cells.isSolid(cell.x, cell.y, cell.z) ? FaceHit.onTop(cell) : null;
-    }
     return CellPick.pick(this.iso, cells, bounds, screenX, screenY);
   }
 
   /** The pad cell under a screen point, or `null` off the pad (face-placement spec 2.2). */
   public groundAt(screenX: number, screenY: number): IVec3 | null {
-    if (!this.isIso) {
-      return GroundPick.NONE;
-    }
     return GroundPick.at(this.iso, this.design.pad, screenX, screenY);
   }
 
@@ -145,9 +82,10 @@ export class Projection {
    * The cell a placement fills, or `null` when there is nowhere to put one (face-placement
    * spec 2).
    *
-   * `occupied` is every live block, peeled or not, because the pick skips peeled cells while
-   * the blocks are still there (spec 2.4). In the flat developer view the plane rule survives
-   * whole: the cell under the pointer in the active section, faces and pad and all (spec 2.7).
+   * `occupied` can no longer refuse anything (no-sections spec 2.3): the cell across the face
+   * the ray entered by is the cell the ray visited immediately before, and the traversal only
+   * reached the block by finding it empty. The guard stays because it is the contract of the
+   * rule rather than a branch this caller needs, and because a theorem is worth a test.
    */
   public placementAt(
     picked: FaceHit | null,
@@ -155,9 +93,6 @@ export class Projection {
     screenX: number,
     screenY: number
   ): IVec3 | null {
-    if (!this.isIso) {
-      return this.cellAt(screenX, screenY);
-    }
     return PlacementRule.target(picked, this.groundAt(screenX, screenY), occupied);
   }
 
@@ -181,10 +116,6 @@ export class Projection {
    */
   public static fit(design: FieldDesign, view: ViewState, widthPx: number, heightPx: number): void {
     const bounds = design.viewBounds;
-    if (view.mode === ViewMode.Flat) {
-      Projection.fitFlat(design, view, widthPx, heightPx);
-      return;
-    }
     const yaw = view.yaw;
     const minX = bounds.min.x;
     const maxX = bounds.min.x + bounds.size.x;
@@ -231,23 +162,5 @@ export class Projection {
     const padZ = (design.pad.minZ + design.pad.maxZ + 1) * 0.5;
     const groundV = (yaw.p(padX, padZ) - yaw.r(padX, padZ)) * 0.5 - design.pad.level;
     view.panY = Math.round(heightPx * Projection.GROUND_ANCHOR - groundV * view.scale);
-  }
-
-  private static fitFlat(
-    design: FieldDesign,
-    view: ViewState,
-    widthPx: number,
-    heightPx: number
-  ): void {
-    const bounds = design.viewBounds;
-    const scaleX = widthPx / (bounds.size.z + 1);
-    const scaleY = heightPx / (bounds.size.y + 1);
-    const scale = scaleX < scaleY ? scaleX : scaleY;
-    view.scale = ZoomLadder.snap(scale);
-    const span = bounds.size.z * view.scale;
-    view.panX = Math.round((widthPx - span) * 0.5);
-    const top = bounds.min.y + bounds.size.y;
-    const groundRow = top - design.pad.level;
-    view.panY = Math.round(heightPx * Projection.GROUND_ANCHOR - groundRow * view.scale);
   }
 }

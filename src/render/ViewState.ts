@@ -1,5 +1,4 @@
 import { IVec3 } from "../core/IVec3";
-import { ViewMode } from "./ViewMode";
 import { ViewYaw } from "./ViewYaw";
 import { ZoomLadder } from "./ZoomLadder";
 
@@ -57,30 +56,13 @@ export function overlayLegend(mode: OverlayMode): string {
  *
  * The type split is load-bearing rather than tidy: if a view change could reach sim state,
  * a replay would diverge from the run it recorded and the whole loop would break. So this
- * object is the only place pan, zoom, the overlay, the inspected cell and the cross-section
- * live, and the simulation never sees it.
+ * object is the only place pan, zoom, the yaw, the overlay and the inspected cell live, and
+ * the simulation never sees it.
  */
 export class ViewState {
   public overlay: OverlayMode;
-  /**
-   * Which projection the field is drawn with (isometric renderer spec 2).
-   *
-   * `Iso` always, for a tester: it is the only tester-facing projection and there is nothing
-   * to toggle. `Flat` is reachable from the dev readout alone (spec 9).
-   */
-  public mode: ViewMode;
   /** Which quarter turn the camera is at (spec 2.2). Four states, `q` and `e`. */
   public yaw: ViewYaw;
-  /**
-   * Which x cross-section is the **reach plane**: the nearest section a verb can still
-   * address, and therefore where the cutaway sits (face-placement spec 3.1, spec 6).
-   *
-   * One control with one meaning, now that placement no longer lands in it. Stepping it away
-   * from the camera peels one more wall off the front of the turret and lets a verb reach one
-   * section deeper; parked at the frontmost section it peels nothing, which is why there is
-   * no separate flag for "solid" (spec 3.2).
-   */
-  public slice: number;
   /** Zoom, in screen pixels per voxel edge. Always a rung of `ZoomLadder` (spec 2.3). */
   public scale: number;
   /** Pan, in screen pixels. */
@@ -94,11 +76,9 @@ export class ViewState {
   public highlightJointLow: number;
   public highlightJointHigh: number;
 
-  public constructor(slice: number) {
+  public constructor() {
     this.overlay = OverlayMode.Material;
-    this.mode = ViewMode.Iso;
     this.yaw = ViewYaw.initial;
-    this.slice = slice;
     this.scale = ZoomLadder.initial;
     this.panX = 0;
     this.panY = 0;

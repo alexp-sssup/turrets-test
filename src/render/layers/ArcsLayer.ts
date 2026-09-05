@@ -49,14 +49,13 @@ export class ArcsLayer implements Layer {
     if (samples.length === 0) {
       return;
     }
-    const onSlice = position.x === context.view.slice;
+
     const originX = position.x + 0.5;
     const originY = position.y + 0.5;
     const originZ = position.z + 0.5;
     const muzzleX = projection.screenX(originX, originZ);
     const muzzleY = projection.screenY(originX, originY, originZ);
 
-    ctx.globalAlpha = onSlice ? 1 : 0.45;
     for (let i = 0; i < samples.length; i++) {
       const sample = samples[i];
       const endX = originX + sample.dirX * sample.steps;

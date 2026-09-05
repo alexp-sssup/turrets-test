@@ -21,8 +21,9 @@ import { OverlayMode, overlayName } from "../ViewState";
  * * **Composes, never replaces.** The composition has already drawn the structure; this
  *   draws on top of it and is occluded by nothing (spec 4.1). A stress bar hidden behind the
  *   wall it describes is a measurement lost.
- * * **Anchored to the reach plane.** The joints touching the active section and no others,
- *   at every yaw, so a quarter turn does not change the question the overlay answers.
+ * * **Every joint, at every yaw.** This used to be the joints of one cross-section, which
+ *   answered "can a tester read one plane of the solver"; the field the solver produces is
+ *   the whole field, and §1.1 asks about that one (no-sections spec 2.4).
  */
 export class StressLayer implements Layer {
   public readonly id: string = overlayName(OverlayMode.Stress);
@@ -43,17 +44,12 @@ export class StressLayer implements Layer {
       return;
     }
     const blueprint = frame.design.blueprint;
-    const slice = context.view.slice;
 
     for (let j = 0; j < joints.count; j++) {
       const low = joints.low[j];
       const high = joints.high[j];
       const highPosition = blueprint.blockAt(high).position;
       const lowPosition = low >= 0 ? blueprint.blockAt(low).position : null;
-      const onSlice = highPosition.x === slice || (lowPosition !== null && lowPosition.x === slice);
-      if (!onSlice) {
-        continue;
-      }
       const utilization = joints.utilization[j];
       const band = Palette.bandOf(utilization);
       // `critical` marks the failure mechanism at the *collapse* load, which is a non-empty

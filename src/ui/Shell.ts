@@ -2,7 +2,6 @@ import { OVERLAY_COUNT, OverlayMode, overlayLegend, overlayName } from "../rende
 import { Palette } from "../render/Palette";
 import { Dom } from "./Dom";
 import { FieldControls } from "./FieldControls";
-import { ViewMode, viewModeName } from "../render/ViewMode";
 import { ShellState } from "./ShellState";
 
 /**
@@ -59,8 +58,6 @@ export class Shell {
       this.renderOverlays(state);
       this.lastOverlay = state.overlay as number;
       this.lastCompact = state.compact;
-    } else {
-      this.renderSlice(state);
     }
     this.renderDev(state);
   }
@@ -160,11 +157,7 @@ export class Shell {
     }
     html += '<span class="overlay-legend">' + Dom.escape(overlayLegend(state.overlay)) + "</span>";
     html += Shell.bandLegend(state.overlay);
-    if (!state.compact) {
-      html += '<span class="slice-mount" id="shell-slice"></span>';
-    }
     Dom.setHtml(this.overlayBar, html);
-    this.renderSlice(state);
   }
 
   /**
@@ -191,15 +184,6 @@ export class Shell {
     }
     html += "</span>";
     return html;
-  }
-
-  /** The per-column strip, or the stepper when the strip would not fit on one row (4.5). */
-  private renderSlice(state: ShellState): void {
-    const mount = document.getElementById("shell-slice");
-    if (mount === null) {
-      return;
-    }
-    Dom.setHtml(mount, FieldControls.sliceControl(state));
   }
 
   /**
@@ -241,14 +225,6 @@ export class Shell {
         '<span class="dev-item">tick ' +
         state.tick.toString() +
         "</span>" +
-        // Isometric renderer spec 9: the flat cross-section is a developer diagnostic and
-        // this is the only door to it. It is not a mode a tester can find, choose, or spend
-        // attention learning, because the build no longer validates it.
-        '<button class="dev-item dev-toggle' +
-        (state.viewMode === ViewMode.Flat ? " warn" : "") +
-        '" data-action="projection">' +
-        Dom.escape(viewModeName(state.viewMode)) +
-        "</button>" +
         '<span class="dev-item' +
         (state.stalled ? " bad" : "") +
         '">sim lead ' +

@@ -3,7 +3,6 @@ import { FaceHit } from "./FaceHit";
 import { FieldFrame } from "./FieldFrame";
 import { DetailLevel } from "./DetailLevel";
 import { FrameCells } from "./FrameCells";
-import { PeelPlane } from "./PeelPlane";
 import { DrawContext, Layer } from "./Layer";
 import { Projection } from "./Projection";
 import { ViewState, OverlayMode } from "./ViewState";
@@ -168,7 +167,7 @@ export class FieldRenderer {
     clientY: number
   ): FaceHit | null {
     const rect = this.canvas.getBoundingClientRect();
-    const cells = new FrameCells(frame, FieldRenderer.peelOf(frame, view), true);
+    const cells = new FrameCells(frame);
     return this.projection(frame, view).pick(
       cells,
       frame.design.viewBounds,
@@ -182,9 +181,7 @@ export class FieldRenderer {
    * (face-placement spec 2). `null` when there is nowhere to put a block.
    *
    * Takes the hit from `pickAt` rather than repeating it: a hover asks both questions about
-   * one pointer position, and the ray is walked once for the pair. The occupancy test takes
-   * *every* live block and not the peel-filtered set, because a peeled block is unpickable
-   * while it is still there (spec 2.4).
+   * one pointer position, and the ray is walked once for the pair.
    */
   public placementAt(
     frame: FieldFrame,
@@ -194,7 +191,7 @@ export class FieldRenderer {
     clientY: number
   ): IVec3 | null {
     const rect = this.canvas.getBoundingClientRect();
-    const cells = new FrameCells(frame, FieldRenderer.peelOf(frame, view), false);
+    const cells = new FrameCells(frame);
     return this.projection(frame, view).placementAt(
       picked,
       cells,
@@ -212,17 +209,6 @@ export class FieldRenderer {
   ): IVec3 | null {
     const rect = this.canvas.getBoundingClientRect();
     return this.projection(frame, view).groundAt(clientX - rect.left, clientY - rect.top);
-  }
-
-  /** The peel this frame is drawn with, derived from the reach plane (spec 3.2). */
-  public static peelOf(frame: FieldFrame, view: ViewState): PeelPlane {
-    return new PeelPlane(
-      frame.design.sliceMin,
-      frame.design.sliceMax,
-      view.slice,
-      view.yaw,
-      view.mode
-    );
   }
 
   public render(frame: FieldFrame, view: ViewState): void {

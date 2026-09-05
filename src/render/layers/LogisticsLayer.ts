@@ -73,20 +73,15 @@ export class LogisticsLayer implements Layer {
   private static drawPath(context: DrawContext, path: Path): void {
     const ctx = context.ctx;
     const projection = context.projection;
-    const slice = context.view.slice;
     ctx.lineWidth = 2;
     ctx.lineJoin = "round";
     for (let i = 0; i + 1 < path.cellCount; i++) {
       const from = path.cellAt(i);
       const to = path.cellAt(i + 1);
-      const onSlice = from.x === slice && to.x === slice;
-      // In the flat dev view a leg that leaves the drawn cross-section is dashed: the
-      // corridor is real, it just is not in that slice, and pretending otherwise would
-      // misreport the route's shape. The isometric view has a place for it and needs no
-      // apology.
-      const dashed = !projection.isIso && !onSlice;
-      ctx.strokeStyle = dashed ? "rgba(255,209,102,0.35)" : "rgba(255,209,102,0.9)";
-      ctx.setLineDash(dashed ? [3, 3] : []);
+      // A leg is a leg wherever it runs: the projection has a place for every cell, so no
+      // part of a route needs the apology a dashed line used to make for it (no-sections
+      // spec 2.4).
+      ctx.strokeStyle = "rgba(255,209,102,0.9)";
       ctx.beginPath();
       ctx.moveTo(
         projection.screenX(from.x + 0.5, from.z + 0.5),
@@ -124,8 +119,6 @@ export class LogisticsLayer implements Layer {
       const position = blueprint.blockAt(depot.block).position;
       const centreX = context.projection.screenX(position.x + 0.5, position.z + 0.5);
       const top = context.projection.screenY(position.x + 0.5, position.y + 1, position.z + 0.5);
-      const onSlice = position.x === context.view.slice;
-      ctx.globalAlpha = onSlice ? 1 : 0.55;
 
       // Fill level as a bar over the block, and the cook-off radius as a ring on the block's
       // own level when a neighbour is inside it: "depot dispersal is two-sided" made visible.

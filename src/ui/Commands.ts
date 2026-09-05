@@ -1,5 +1,4 @@
 import { IVec3 } from "../core/IVec3";
-import { ViewMode } from "../render/ViewMode";
 import { ViewYaw } from "../render/ViewYaw";
 import { ZoomLadder } from "../render/ZoomLadder";
 import { OverlayMode, ViewState } from "../render/ViewState";
@@ -63,8 +62,6 @@ export enum ViewCommandKind {
   Seek = 3,
   Pan = 4,
   Zoom = 5,
-  /** Which cross-section is the reach plane, and therefore the peel (iso renderer spec 6). */
-  Slice = 6,
   /**
    * Frame the design in the viewport (mobile UI spec 7.1).
    *
@@ -73,16 +70,7 @@ export enum ViewCommandKind {
    * was added for any gesture -- that is what keeps a phone attempt replayable in the
    * desktop build and in the headless batch runner.
    */
-  Fit = 7,
-  /**
-   * Flat or 2.5D (depth view spec 5).
-   *
-   * A view command like every other one here, and the reason that matters is stated in
-   * depth view spec 4.5: an attempt flown in the depth view has to replay identically in
-   * the flat one. Nothing about the projection is logged, and no `SimCommand` was added for
-   * it.
-   */
-  Mode = 8,
+  Fit = 6,
   /**
    * A quarter turn of the camera (isometric renderer spec 2.2).
    *
@@ -90,7 +78,7 @@ export enum ViewCommandKind {
    * yaws are four pictures of the same run, and an attempt flown at yaw 2 replays to the
    * same final state hash as one flown at yaw 0 (spec 10.5).
    */
-  Yaw = 9,
+  Yaw = 7,
 }
 
 export class ViewCommand {
@@ -130,16 +118,8 @@ export class ViewCommand {
     return new ViewCommand(ViewCommandKind.Zoom, factor, 0, null);
   }
 
-  public static slice(x: number): ViewCommand {
-    return new ViewCommand(ViewCommandKind.Slice, x, 0, null);
-  }
-
   public static fit(): ViewCommand {
     return new ViewCommand(ViewCommandKind.Fit, 0, 0, null);
-  }
-
-  public static mode(mode: ViewMode): ViewCommand {
-    return new ViewCommand(ViewCommandKind.Mode, mode as number, 0, null);
   }
 
   public static yaw(id: number): ViewCommand {
@@ -253,21 +233,12 @@ export class Dispatcher {
       this.fit.fitView();
       return;
     }
-    if (command.kind === ViewCommandKind.Mode) {
-      this.view.mode = command.value as ViewMode;
-      return;
-    }
     if (command.kind === ViewCommandKind.Yaw) {
       this.view.yaw = ViewYaw.of(command.value);
       return;
     }
-    if (command.kind === ViewCommandKind.Zoom) {
-      // Zoom lands on a rung of the ladder and nowhere between (isometric renderer spec
-      // 2.3): every voxel vertex has to stay on an exact pixel, so a pinch snaps and so does
-      // a key.
-      this.view.scale = ZoomLadder.scaled(this.view.scale, command.value);
-      return;
-    }
-    this.view.slice = command.value;
+    // Zoom lands on a rung of the ladder and nowhere between (isometric renderer spec 2.3):
+    // every voxel vertex has to stay on an exact pixel, so a pinch snaps and so does a key.
+    this.view.scale = ZoomLadder.scaled(this.view.scale, command.value);
   }
 }

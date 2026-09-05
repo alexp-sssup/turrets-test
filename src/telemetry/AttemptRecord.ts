@@ -93,27 +93,22 @@ export class AttemptRecord {
   public replayScrubCount: number;
   public readonly overlayDwell: OverlayDwell;
   /**
-   * What the tester did with the camera and the cutaway (isometric renderer spec 11).
+   * What the tester did with the camera (isometric renderer spec 11).
    *
-   * There is one projection now, so "did they use the 2.5D mode" is not a question any more.
-   * These are the questions that replace it, and each is here because a tester cannot be
-   * asked it directly:
+   * There is one projection and one treatment, so neither "did they use the 2.5D mode" nor
+   * the two cutaway questions are questions any more (no-sections spec 4). These are the ones
+   * that remain, and each is here because a tester cannot be asked it directly:
    *
    * * **Yaw changes**, and whether any happened before the first run: is the fourth wall
    *   being looked behind, or is the default view all anyone ever sees? If nobody turns the
-   *   camera, the four yaws were scope that should have gone elsewhere.
-   * * **Peel moves**, counted separately in Design and in Run: is the cutaway a build tool,
-   *   a diagnosis tool, or both?
-   * * **Run seconds with a peel engaged**: if this is high, testers are choosing the diagram
-   *   over the game, and spec 1's whole argument is wrong.
+   *   camera, the four yaws were scope that should have gone elsewhere -- and the camera is
+   *   now the only way to reach the two faces a click cannot (face-placement spec 2.3), so
+   *   this counts something the editor depends on rather than something it offers.
    * * **Zoom rungs used and seconds at the floor rung**: is a phone tester reading the
    *   turret at a size where spec 3.2 has already dropped the detail?
    */
   public yawChanges: number;
   public yawChangedBeforeRun: boolean;
-  public peelMovesInDesign: number;
-  public peelMovesInRun: number;
-  public runSecondsWithPeel: number;
   public zoomRungsUsed: number;
   public secondsAtFloorRung: number;
   /** Render p95 per yaw, because fill cost differs by silhouette (spec 11). */
@@ -166,9 +161,6 @@ export class AttemptRecord {
     this.overlayDwell = new OverlayDwell();
     this.yawChanges = 0;
     this.yawChangedBeforeRun = false;
-    this.peelMovesInDesign = 0;
-    this.peelMovesInRun = 0;
-    this.runSecondsWithPeel = 0;
     this.zoomRungsUsed = 0;
     this.secondsAtFloorRung = 0;
     this.renderMsP95ByYaw = [0, 0, 0, 0];

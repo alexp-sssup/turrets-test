@@ -6,9 +6,7 @@ import { SampleBlueprints } from "../../src/blueprint/SampleBlueprints";
 import { FieldDesign } from "../../src/render/FieldDesign";
 import { FieldFrame } from "../../src/render/FieldFrame";
 import { FrameBuilder } from "../../src/render/FrameBuilder";
-import { PeelPlane } from "../../src/render/PeelPlane";
 import { StructureCache } from "../../src/render/StructureCache";
-import { ViewMode } from "../../src/render/ViewMode";
 import { ViewState } from "../../src/render/ViewState";
 import { ViewYaw } from "../../src/render/ViewYaw";
 import { BlockStructure } from "../../src/structure/BlockStructure";
@@ -25,12 +23,8 @@ function frameOf(design: FieldDesign, structure: BlockStructure): FieldFrame {
   return new FrameBuilder(design).fromDesign(structure, null, null);
 }
 
-function peelOf(design: FieldDesign, view: ViewState): PeelPlane {
-  return new PeelPlane(design.sliceMin, design.sliceMax, view.slice, view.yaw, view.mode);
-}
-
 function signature(design: FieldDesign, frame: FieldFrame, view: ViewState): number {
-  return StructureCache.signature(view, frame, peelOf(design, view), 900, 600, 0);
+  return StructureCache.signature(view, frame, 900, 600, 0);
 }
 
 describe("StructureCache (isometric renderer spec 8)", () => {
@@ -38,7 +32,7 @@ describe("StructureCache (isometric renderer spec 8)", () => {
     const design = scene();
     const structure = new BlockStructure(design.blueprint);
     const frame = frameOf(design, structure);
-    const view = new ViewState(2);
+    const view = new ViewState();
     assert.equal(signature(design, frame, view), signature(design, frame, view));
   });
 
@@ -46,36 +40,29 @@ describe("StructureCache (isometric renderer spec 8)", () => {
     const design = scene();
     const structure = new BlockStructure(design.blueprint);
     const frame = frameOf(design, structure);
-    const view = new ViewState(2);
+    const view = new ViewState();
     const base = signature(design, frame, view);
 
-    const zoomed = new ViewState(2);
+    const zoomed = new ViewState();
     zoomed.scale = 24;
     assert.notEqual(signature(design, frame, zoomed), base);
 
-    const panned = new ViewState(2);
+    const panned = new ViewState();
     panned.panX = 40;
     assert.notEqual(signature(design, frame, panned), base);
 
-    const turned = new ViewState(2);
+    const turned = new ViewState();
     turned.yaw = ViewYaw.of(1);
     assert.notEqual(signature(design, frame, turned), base);
 
-    const stepped = new ViewState(3);
-    assert.notEqual(signature(design, frame, stepped), base);
-
-    const flat = new ViewState(2);
-    flat.mode = ViewMode.Flat;
-    assert.notEqual(signature(design, frame, flat), base);
-
-    assert.notEqual(StructureCache.signature(view, frame, peelOf(design, view), 800, 600, 0), base);
+    assert.notEqual(StructureCache.signature(view, frame, 800, 600, 0), base);
     // Spec 8's degradation order changes what is drawn, so it changes what is cached.
-    assert.notEqual(StructureCache.signature(view, frame, peelOf(design, view), 900, 600, 1), base);
+    assert.notEqual(StructureCache.signature(view, frame, 900, 600, 1), base);
   });
 
   it("changes when a block takes damage or dies", () => {
     const design = scene();
-    const view = new ViewState(2);
+    const view = new ViewState();
     const intact = new BlockStructure(design.blueprint);
     const base = signature(design, frameOf(design, intact), view);
 
@@ -99,7 +86,7 @@ describe("StructureCache (isometric renderer spec 8)", () => {
     const design = scene();
     const structure = new BlockStructure(design.blueprint);
     const frame = frameOf(design, structure);
-    const view = new ViewState(2);
+    const view = new ViewState();
     const base = signature(design, frame, view);
     view.hover = new IVec3(2, 1, 4);
     view.selected = new IVec3(2, 2, 5);

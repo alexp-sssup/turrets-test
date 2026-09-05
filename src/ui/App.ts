@@ -12,13 +12,11 @@ import { BlueprintCodec } from "../persistence/BlueprintCodec";
 import { BlueprintLibrary } from "../persistence/BlueprintLibrary";
 import { ActorPainter } from "../render/ActorPainter";
 import { FaceHit } from "../render/FaceHit";
-import { PeelPlane } from "../render/PeelPlane";
 import { FieldDesign } from "../render/FieldDesign";
 import { FieldFrame, isLoudStatus } from "../render/FieldFrame";
 import { FieldRenderer } from "../render/FieldRenderer";
 import { FrameBuilder } from "../render/FrameBuilder";
 import { PredictAnalysis, PredictOutcome } from "../render/PredictAnalysis";
-import { ViewMode } from "../render/ViewMode";
 import { ViewYaw } from "../render/ViewYaw";
 import { ZoomLadder } from "../render/ZoomLadder";
 import { OverlayMode, ViewState } from "../render/ViewState";
@@ -124,15 +122,6 @@ export class App implements SimTarget, FitTarget {
   private importText: string;
   private devExpanded: boolean;
   private lastZoomRung: number;
-  private slicePickerOpen: boolean;
-  /**
-   * Whether the turret is cut open, for the telemetry alone (face-placement spec 3.2).
-   *
-   * Not a control and not state the renderer reads: the peel is derived from the reach plane
-   * everywhere it matters. This is the last edge of it, kept so `notePeel` is called once per
-   * transition rather than once per frame.
-   */
-  private peeling: boolean;
   /**
    * Whether the tap that opened a double-tap pair actually placed a cell (mobile UI spec
    * 6.2). A gesture the tester meant as a view change must not leave an edit behind.
@@ -195,7 +184,7 @@ export class App implements SimTarget, FitTarget {
       this.budget,
       this.dials
     );
-    this.view = new ViewState(this.arena.laneCentreX);
+    this.view = new ViewState();
     this.designDesign = this.buildDesign(opening);
     this.designBuilder = new FrameBuilder(this.designDesign);
     this.designFrame = this.designBuilder.fromDesign(this.editor.structure(), null, this.editor.geometry);
@@ -203,11 +192,6 @@ export class App implements SimTarget, FitTarget {
     this.attempt = null;
     this.guided = this.store.read(SEEN_GUIDED_RUN_KEY) === null;
     this.screen = this.guided ? Screen.Run : Screen.Design;
-    // Face-placement spec 3.3: every screen opens with the reach plane at the frontmost
-    // section, and therefore on a solid turret. Set here as well as in `goTo`, because the
-    // first screen is not arrived at through it.
-    this.view.slice = this.designDesign.frontSlice(this.view.yaw);
-    this.peeling = false;
     this.panelDirty = true;
     this.lastPanelMs = 0;
     this.lastShellMs = 0;
@@ -223,7 +207,6 @@ export class App implements SimTarget, FitTarget {
     this.banner = "";
     this.importText = "";
     this.devExpanded = false;
-    this.slicePickerOpen = false;
     this.lastTapPlaced = false;
     this.keyboardUsed = false;
     this.gestureTaps = 0;
@@ -422,53 +405,9 @@ export class App implements SimTarget, FitTarget {
    */
   private turnCamera(quarters: number): void {
     this.dispatcher.dispatchView(ViewCommand.yaw(this.view.yaw.turned(quarters).id));
-    // Face-placement spec 3.3: "frontmost" is a fact about the yaw, so a quarter turn that
-    // left the reach plane where it was would flip a two-section cutaway into a cutaway of
-    // everything else -- the turret would turn inside out under the key that exists to show
-    // the tester the other side of it.
-    this.view.slice = this.currentDesign().frontSlice(this.view.yaw);
-    this.notePeelState();
     Projection.fit(this.currentDesign(), this.view, this.renderer.width, this.renderer.height);
     this.telemetry.noteYaw(App.now());
     this.panelDirty = true;
-  }
-
-  /**
-   * Moves the reach plane, and with it the cutaway (spec 6, face-placement spec 3.1).
-   *
-   * One control with one meaning. Every screen opens with the plane at the frontmost section
-   * and nothing peeled (spec 3.3), so the first step a tester takes is also the one that
-   * opens the turret up, which is what they meant by pressing it -- and the peel needs no
-   * flag of its own to say so (spec 3.2).
-   */
-  private moveReachPlane(next: number): void {
-    this.dispatcher.dispatchView(ViewCommand.slice(next));
-    this.telemetry.notePeelMove();
-    this.notePeelState();
-    this.panelDirty = true;
-  }
-
-  /**
-   * Reports the cutaway opening and closing (isometric renderer spec 10).
-   *
-   * The peel is derived from the reach plane rather than flagged beside it (face-placement
-   * spec 3.2), so the one thing that still wants a boolean is the telemetry, which measures
-   * seconds spent with the turret cut open. It is computed here and nowhere else.
-   */
-  private notePeelState(): void {
-    const design = this.currentDesign();
-    const peeling = new PeelPlane(
-      design.sliceMin,
-      design.sliceMax,
-      this.view.slice,
-      this.view.yaw,
-      this.view.mode
-    ).peeling;
-    if (peeling === this.peeling) {
-      return;
-    }
-    this.peeling = peeling;
-    this.telemetry.notePeel(peeling, App.now());
   }
 
   private zoomBy(factor: number): void {
@@ -912,15 +851,7 @@ export class App implements SimTarget, FitTarget {
   private goTo(screen: Screen): void {
     this.screen = screen;
     this.panelDirty = true;
-    this.slicePickerOpen = false;
     this.syncSheetTabs();
-    // Face-placement spec 3.3: every screen opens with the reach plane at the frontmost
-    // section, and therefore solid. Isometric renderer spec 6 asked for that on Run and
-    // Replay because a run rendered as a cross-section is a run nobody is playing; Design
-    // joins them because a placement needs a face that is drawn solid to build against, and
-    // a full cutaway would open the editor with nothing left to aim at.
-    this.view.slice = this.currentDesign().frontSlice(this.view.yaw);
-    this.notePeelState();
     if (screen === Screen.Design || screen === Screen.Library) {
       this.telemetry.noteRunning(false, App.now());
     }
@@ -1136,25 +1067,7 @@ export class App implements SimTarget, FitTarget {
           ? Number.POSITIVE_INFINITY
           : this.editor.structural.loadFactor;
     state.overlay = this.view.overlay;
-    state.slice = this.view.slice;
-    state.sliceMin = frame.design.sliceMin;
-    state.sliceMax = frame.design.sliceMax;
-    state.viewMode = this.view.mode;
     state.yaw = this.view.yaw.id;
-    const peel = new PeelPlane(
-      frame.design.sliceMin,
-      frame.design.sliceMax,
-      this.view.slice,
-      this.view.yaw,
-      this.view.mode
-    );
-    state.peeling = peel.peeling;
-    state.peeledSections = peel.peeledCount;
-    const sliceCounts: number[] = [];
-    for (let x = frame.design.sliceMin; x <= frame.design.sliceMax; x++) {
-      sliceCounts.push(frame.design.blocksInSlice(x).length);
-    }
-    state.sliceCounts = sliceCounts;
     state.sessionId = this.telemetry.sessionId;
     state.attemptNumber = this.telemetry.attemptCount < 1 ? 1 : this.telemetry.attemptCount;
     state.solverMs = attempt === null ? this.editor.solveMs : attempt.solverMs.latest;
@@ -1174,8 +1087,6 @@ export class App implements SimTarget, FitTarget {
     state.coarse = this.viewport.coarse;
     state.condensed = this.viewport.mode !== LayoutMode.Wide;
     state.compact = this.viewport.mode === LayoutMode.Compact;
-    state.useSliceStepper = this.sliceStripWouldOverflow(state);
-    state.slicePickerOpen = this.slicePickerOpen;
     state.devExpanded = this.devExpanded;
     state.inDesign = this.screen === Screen.Design;
     state.canUndo = this.editor.canUndo;
@@ -1189,23 +1100,6 @@ export class App implements SimTarget, FitTarget {
     return state;
   }
 
-  /**
-   * Whether the per-column strip still fits on one row (mobile UI spec 4.5).
-   *
-   * A width question, not a device question, which is why the answer applies in `Wide` too:
-   * at the 48 x 48 grid §5 pins, forty-eight numbered buttons do not fit on any row anyone
-   * owns, and the stepper is what keeps the cross-section reachable there.
-   */
-  private sliceStripWouldOverflow(state: ShellState): boolean {
-    const columns = state.sliceMax - state.sliceMin + 1;
-    // A slice cell is about 24 px of button plus its gap, and the strip carries a label.
-    const stripPx = columns * 30 + 90;
-    const availablePx =
-      this.viewport.mode === LayoutMode.Compact
-        ? this.renderer.width
-        : this.viewport.widthPx - this.viewport.widthPx * 0.55;
-    return stripPx > availablePx;
-  }
 
   /**
    * The current screen's one action, surfaced outside the sheet (mobile UI spec 8.4).
@@ -1575,9 +1469,8 @@ export class App implements SimTarget, FitTarget {
    *
    * One pick answers both halves. The eraser takes away the block it is on; a placing entry
    * builds across the face that block was met through, or on the pad where there is no
-   * block. `null` is the eraser over empty scene, a placement with neither a face nor the
-   * pad under the pointer, and a placement whose target cell already holds a block the peel
-   * has taken out of the way (spec 2.4).
+   * block. `null` is the eraser over empty scene, and a placement with neither a face nor
+   * the pad under the pointer (spec 2.2).
    */
   private editTargetAt(clientX: number, clientY: number): IVec3 | null {
     const hit = this.hitAt(clientX, clientY);
@@ -1704,11 +1597,6 @@ export class App implements SimTarget, FitTarget {
       this.dispatcher.dispatchView(ViewCommand.overlay(Number(key) as OverlayMode));
       return;
     }
-    if (key === "[" || key === "]") {
-      const design = this.currentDesign();
-      this.moveReachPlane(design.clampSlice(this.view.slice + (key === "[" ? -1 : 1)));
-      return;
-    }
     if (key === "q" || key === "e") {
       this.turnCamera(key === "q" ? 1 : -1);
       return;
@@ -1758,8 +1646,6 @@ export class App implements SimTarget, FitTarget {
       return true;
     }
     return (
-      key === "[" ||
-      key === "]" ||
       key === "v" ||
       key === "z" ||
       key === "y" ||
@@ -1791,25 +1677,9 @@ export class App implements SimTarget, FitTarget {
       this.dispatcher.dispatchView(ViewCommand.overlay(Number(value) as OverlayMode));
       return;
     }
-    if (action === "slice") {
-      this.moveReachPlane(Number(value));
-      this.slicePickerOpen = false;
-      this.panelDirty = true;
-      return;
-    }
     // Mobile UI spec 6.1: the on-screen half of the verb table. Every one of these resolves
     // to a command the keyboard already fires -- nothing is moved off the keyboard, and
     // nothing here is a new `SimCommand` (7.1).
-    if (action === "slice-step") {
-      const design = this.currentDesign();
-      this.moveReachPlane(design.clampSlice(this.view.slice + Number(value)));
-      return;
-    }
-    if (action === "slice-picker") {
-      this.slicePickerOpen = !this.slicePickerOpen;
-      this.panelDirty = true;
-      return;
-    }
     if (action === "yaw") {
       this.turnCamera(Number(value));
       return;
@@ -1831,16 +1701,6 @@ export class App implements SimTarget, FitTarget {
     }
     if (action === "sheet-toggle") {
       this.sheet.toggle();
-      this.panelDirty = true;
-      return;
-    }
-    if (action === "projection") {
-      // Isometric renderer spec 9: the flat cross-section, from the dev readout only. Kept
-      // because it is the clearest possible picture of one slice and costs nothing to keep;
-      // out of the tester's control bar because the build no longer validates it.
-      const next = this.view.mode === ViewMode.Iso ? ViewMode.Flat : ViewMode.Iso;
-      this.dispatcher.dispatchView(ViewCommand.mode(next));
-      Projection.fit(this.currentDesign(), this.view, this.renderer.width, this.renderer.height);
       this.panelDirty = true;
       return;
     }
@@ -2025,12 +1885,10 @@ export class App implements SimTarget, FitTarget {
     if (block >= blueprint.blockCount) {
       return;
     }
+    // "Locate" is a selection now and nothing more (no-sections spec 3): there is no plane to
+    // move, and the mark is drawn over the geometry rather than through it (spec 4.1), so a
+    // block inside the turret is still pointed at.
     const position = blueprint.blockAt(block).position;
-    // The reach plane goes to the block's section, which peels everything in front of it and
-    // is what "locate" means now the peel follows the plane (face-placement spec 3.1, 3.2):
-    // the block the row names is the deepest thing still drawn solid.
-    this.view.slice = position.x;
-    this.notePeelState();
     this.view.selected = position;
     this.panelDirty = true;
   }

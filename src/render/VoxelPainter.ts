@@ -5,7 +5,6 @@ import { CellSilhouette } from "./CellSilhouette";
 import { FacePalette } from "./FacePalette";
 import { DrawContext } from "./Layer";
 import { Palette } from "./Palette";
-import { SectionCue } from "./SectionCue";
 import { ViewFacing } from "./ViewFacing";
 import { VoxelFace } from "./VoxelFace";
 import { VoxelFaces } from "./VoxelFaces";
@@ -21,8 +20,8 @@ import { VoxelFaces } from "./VoxelFaces";
  *
  * The edge rule of spec 3.1 is the one that decides whether a wall reads as a wall: a 1 px
  * darker edge is stroked only along a silhouette or a crease, never along the seam between
- * two coplanar faces. Stroking every cell -- which is what the flat view did -- turns a
- * solid wall into a grid of boxes, so the tester reads texture where there is form.
+ * two coplanar faces. Stroking every cell turns a solid wall into a grid of boxes, so the
+ * tester reads texture where there is form.
  */
 export class VoxelPainter {
   private readonly facing: ViewFacing;
@@ -38,11 +37,10 @@ export class VoxelPainter {
     this.quadY = new Float64Array(VoxelFace.CORNER_COUNT);
   }
 
-  /** A solid cell: its faces, its damage, its fire and its kind. */
+  /** A cell: its faces, its damage, its fire and its kind. */
   public paintSolid(
     context: DrawContext,
     cells: CellPresence,
-    cue: SectionCue,
     block: number,
     x: number,
     y: number,
@@ -61,8 +59,8 @@ export class VoxelPainter {
       }
       this.project(context, face, x, y, z);
       ctx.fillStyle = burning
-        ? Palette.dimmed(Palette.fireHex(damage), face.shade, cue.dim)
-        : this.fills.fill(detail.material, index, cue.dimIndex, damage);
+        ? Palette.shade(Palette.fireHex(damage), face.shade)
+        : this.fills.fill(detail.material, index, damage);
       this.fillQuad(ctx);
       if (context.detail.edges) {
         this.strokeCreases(context, cells, face, x, y, z);
@@ -70,60 +68,19 @@ export class VoxelPainter {
     }
 
     if (detail.kind !== BlockKind.Structural) {
-      this.paintKind(context, cells, cue, detail.kind, block, x, y, z);
+      this.paintKind(context, cells, detail.kind, block, x, y, z);
     }
   }
 
   /**
-   * A peeled cell: the wall between the camera and the reach plane, shown as cut away
-   * rather than deleted (spec 6). Silhouette and creases only, never a fill.
-   */
-  public paintWireframe(
-    context: DrawContext,
-    cells: CellPresence,
-    cue: SectionCue,
-    kind: BlockKind,
-    x: number,
-    y: number,
-    z: number
-  ): void {
-    const ctx = context.ctx;
-    ctx.globalAlpha = cue.alpha;
-    ctx.strokeStyle = kind === BlockKind.Structural ? Palette.peelEdge : Palette.kindColour(kind);
-    ctx.lineWidth = 1;
-    for (let index = 0; index < this.facing.count; index++) {
-      const face = this.facing.at(index);
-      if (!VoxelFaces.isDrawn(cells, face, x, y, z)) {
-        continue;
-      }
-      this.project(context, face, x, y, z);
-      for (let edge = 0; edge < VoxelFace.CORNER_COUNT; edge++) {
-        if (!VoxelFaces.isEdgeStroked(cells, face, x, y, z, edge)) {
-          continue;
-        }
-        this.strokeEdge(ctx, edge);
-      }
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  /**
-   * The flat dev view's ghost (spec 9): one neutral fill for every section but the one being
-   * worked in, because in that projection they all land in the same place and depth cannot
-   * mean anything.
-   */
-  public paintGhost(context: DrawContext, x: number, y: number, z: number): void {
-    CellSilhouette.trace(context, x, y, z);
-    context.ctx.fillStyle = Palette.ghost;
-    context.ctx.fill();
-  }
-
-  /**
-   * A hole where a block used to be, in the reach plane only.
+   * A hole where a block used to be.
    *
-   * "What did I lose" is the first question the replay has to answer, and it is a question
-   * about the section the tester is reading. Holes in every section at once would be a
-   * picture of the whole run's damage rather than of one cross-section's.
+   * "What did I lose" is the first question the replay has to answer. It used to be asked of
+   * one section at a time, because a picture of every hole at once was a picture of the whole
+   * run's damage rather than of the cross-section being read. There is no cross-section
+   * (no-sections spec 3) and the sort answers it instead: a hole behind a live wall is
+   * painted first and the wall is painted over it, so an interior hole is hidden exactly as
+   * the block that made it was.
    */
   public paintHole(context: DrawContext, x: number, y: number, z: number): void {
     const ctx = context.ctx;
@@ -190,16 +147,15 @@ export class VoxelPainter {
   }
 
   /**
-   * The kind badge: a ring on the top face in every solid section, the glyph only in the
-   * reach plane (spec 3.2).
+   * The kind badge: a ring on the top face, and the glyph inside it (spec 3.2).
    *
-   * A depot two sections back is worth knowing about -- that is the interior read the
-   * projection exists for -- but its glyph behind a wall is noise.
+   * The glyph used to be reserved for the reach plane, because a depot's glyph read through
+   * two walls of cutaway was noise. Only cells with a face the camera can see are drawn at
+   * all now, so every badge that is painted is painted on something the tester is looking at.
    */
   private paintKind(
     context: DrawContext,
     cells: CellPresence,
-    cue: SectionCue,
     kind: BlockKind,
     block: number,
     x: number,
@@ -221,9 +177,6 @@ export class VoxelPainter {
       ctx.closePath();
       ctx.stroke();
       ctx.lineWidth = 1;
-    }
-    if (!cue.detail) {
-      return;
     }
     const centreX = projection.screenX(x + 0.5, z + 0.5);
     const centreY = projection.screenY(x + 0.5, y + 0.5, z + 0.5);

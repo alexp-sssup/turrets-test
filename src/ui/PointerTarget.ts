@@ -12,11 +12,11 @@ import { IVec3 } from "../core/IVec3";
  * * **A placement** builds across the face the view ray entered it through, or on the pad
  *   where there is no block (face-placement spec 2.1, 2.2).
  *
- * The placement cell arrives already resolved, because working it out needs the ray, the pad
- * and the unpeeled block set and this rule needs none of them. What is left here is the
- * choice between two candidate cells -- which is a function from values to values, testable
- * either side of every case, and, for the reason mobile UI spec 7.2 gives for
- * `GestureRecognizer`, will not refuse to port.
+ * The placement cell arrives already resolved, because working it out needs the ray and the
+ * pad and this rule needs neither. What is left here is the choice between two candidate
+ * cells -- which is a function from values to values, testable either side of every case,
+ * and, for the reason mobile UI spec 7.2 gives for `GestureRecognizer`, will not refuse to
+ * port.
  */
 export class PointerTarget {
   /**

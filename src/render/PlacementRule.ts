@@ -15,10 +15,12 @@ import { FaceHit } from "./FaceHit";
  * * **Neither** -- the pointer is on the apron, the lane or the sky, and a placement there
  *   would rest on nothing (2.2).
  *
- * `occupied` is the presence of *every* live block, peeled or not, and it has to be: the
- * pick skips peeled cells (pointing spec 2.5) while the blocks are still there, so the cell
- * across a reach-plane block's camera-facing face can already hold one. Overwriting a block
- * the tester cannot see is the uncommanded edit spec 2.4 refuses.
+ * `occupied` can no longer refuse anything, and the guard stays anyway (no-sections spec
+ * 2.3). The cell across the face a ray entered by is the cell it visited immediately before,
+ * and the traversal only got there by finding that cell empty -- so a collision is now a
+ * theorem's negation rather than a case. It is kept because it is this function's contract
+ * rather than its caller's, because it costs one lookup, and because §5 of that document
+ * asks for the theorem to be tested instead of assumed.
  */
 export class PlacementRule {
   /** Nowhere to place: the pointer is over nothing buildable, or over an occupied cell. */
@@ -33,8 +35,8 @@ export class PlacementRule {
     if (cell === null) {
       return PlacementRule.NONE;
     }
-    // 2.4: a placement into an occupied cell changes nothing -- no block, no bill, and
-    // nothing on the undo stack.
+    // face-placement 2.4: a placement into an occupied cell changes nothing -- no block, no
+    // bill, and nothing on the undo stack. Unreachable through a ray (no-sections spec 2.3).
     if (occupied.isSolid(cell.x, cell.y, cell.z)) {
       return PlacementRule.NONE;
     }

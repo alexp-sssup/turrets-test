@@ -16,12 +16,6 @@ export class CellSilhouette {
   public static trace(context: DrawContext, x: number, y: number, z: number): void {
     const projection = context.projection;
     const ctx = context.ctx;
-    if (!projection.isIso) {
-      const scale = projection.scale;
-      ctx.beginPath();
-      ctx.rect(projection.screenX(x, z) + 1, projection.screenY(x, y, z) + 1, scale - 2, scale - 2);
-      return;
-    }
     const iso = projection.iso;
     const anchorX = iso.anchorX(x, z);
     const anchorY = iso.anchorY(x, y, z);

@@ -1,6 +1,5 @@
 import { DrawContext } from "./Layer";
 import { Palette } from "./Palette";
-import { PeelPlane } from "./PeelPlane";
 
 /**
  * The scene the turret stands in (isometric renderer spec 7).
@@ -13,9 +12,6 @@ import { PeelPlane } from "./PeelPlane";
  *   distance along the lane is countable without measuring pixels. This is a grid *on the
  *   ground*, which the flat view's screen-space grid was not.
  * * **The pad**, as the marked area the turret is allowed to stand on rather than a band.
- * * **The reach plane**, which is the face of the cutaway: where the wireframe stops and the
- *   solid turret starts (face-placement spec 3.4). Drawn only while something is peeled,
- *   which is exactly when a tester could otherwise read a cutaway as a missing wall.
  * * **The gun-range marker on the ground**, across the lane, because a range limit lives on
  *   the ground and "nothing is in range yet" has to stay distinguishable from "my gun is
  *   silent".
@@ -27,20 +23,13 @@ export class ScenePainter {
   /** Tile size, in voxels. Also the accent interval. */
   public static readonly TILE: number = 4;
 
-  public static paint(context: DrawContext, peel: PeelPlane): void {
+  public static paint(context: DrawContext): void {
     const ctx = context.ctx;
     ctx.fillStyle = Palette.sky;
     ctx.fillRect(0, 0, context.projection.widthPx, context.projection.heightPx);
-    if (!context.projection.isIso) {
-      ScenePainter.paintFlat(context);
-      return;
-    }
     ScenePainter.paintGround(context);
     ScenePainter.paintPad(context);
     ScenePainter.paintRange(context);
-    if (peel.peeling) {
-      ScenePainter.paintReachPlane(context);
-    }
   }
 
   /** One horizontal quad, in world coordinates, at `level`. */
@@ -156,108 +145,5 @@ export class ScenePainter {
       projection.screenX(maxX, edge) + 4,
       projection.screenY(maxX, pad.level, edge)
     );
-  }
-
-  /**
-   * The face of the cutaway: a translucent sheet with a one-voxel grid, standing in the reach
-   * plane (face-placement spec 3.4).
-   *
-   * It used to say "a click lands here" (spec 5.3) and no longer can, because a click lands
-   * against the face it was aimed at. What it says instead is where the wireframe stops --
-   * the cue spec 6 owed a tester and gave to the readout alone.
-   */
-  private static paintReachPlane(context: DrawContext): void {
-    const ctx = context.ctx;
-    const design = context.frame.design;
-    const bounds = design.viewBounds;
-    const section = context.view.slice;
-    const lowZ = design.pad.minZ;
-    const highZ = design.pad.maxZ + 1;
-    const lowY = design.pad.level;
-    const highY = bounds.min.y + bounds.size.y;
-    const projection = context.projection;
-
-    ctx.beginPath();
-    ctx.moveTo(projection.screenX(section, lowZ), projection.screenY(section, lowY, lowZ));
-    ctx.lineTo(projection.screenX(section, highZ), projection.screenY(section, lowY, highZ));
-    ctx.lineTo(projection.screenX(section, highZ), projection.screenY(section, highY, highZ));
-    ctx.lineTo(projection.screenX(section, lowZ), projection.screenY(section, highY, lowZ));
-    ctx.closePath();
-    ctx.fillStyle = Palette.reachPlane;
-    ctx.fill();
-
-    if (projection.scale < 12 || !context.detail.reachGrid) {
-      return;
-    }
-    ctx.strokeStyle = Palette.reachPlaneLine;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let z = lowZ; z <= highZ; z++) {
-      ctx.moveTo(projection.screenX(section, z), projection.screenY(section, lowY, z));
-      ctx.lineTo(projection.screenX(section, z), projection.screenY(section, highY, z));
-    }
-    for (let y = lowY; y <= highY; y++) {
-      ctx.moveTo(projection.screenX(section, lowZ), projection.screenY(section, y, lowZ));
-      ctx.lineTo(projection.screenX(section, highZ), projection.screenY(section, y, highZ));
-    }
-    ctx.stroke();
-  }
-
-  /**
-   * The flat dev view's ground (spec 9): a horizon line, the pad as a band and a
-   * screen-space voxel grid, which is what that projection can offer.
-   */
-  private static paintFlat(context: DrawContext): void {
-    const ctx = context.ctx;
-    const projection = context.projection;
-    const design = context.frame.design;
-    const bounds = design.viewBounds;
-    const scale = projection.scale;
-    const section = context.view.slice;
-    const groundY = projection.screenY(section, design.pad.level - 1, 0);
-
-    ctx.fillStyle = Palette.background;
-    ctx.fillRect(0, groundY, projection.widthPx, projection.heightPx - groundY);
-    ctx.fillStyle = Palette.pad;
-    ctx.fillRect(
-      projection.screenX(section, design.pad.minZ),
-      groundY - scale * 0.35,
-      (design.pad.maxZ + 1 - design.pad.minZ) * scale,
-      scale * 0.35
-    );
-    ctx.strokeStyle = Palette.padLine;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, Math.round(groundY) + 0.5);
-    ctx.lineTo(projection.widthPx, Math.round(groundY) + 0.5);
-    ctx.stroke();
-
-    if (scale >= 12) {
-      ctx.strokeStyle = Palette.grid;
-      ctx.beginPath();
-      for (let z = bounds.min.z; z <= bounds.min.z + bounds.size.z; z++) {
-        const x = Math.round(projection.screenX(section, z)) + 0.5;
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, groundY);
-      }
-      for (let y = design.pad.level; y <= bounds.min.y + bounds.size.y; y++) {
-        const screenY = Math.round(projection.screenY(section, y - 1, 0)) + 0.5;
-        ctx.moveTo(0, screenY);
-        ctx.lineTo(projection.widthPx, screenY);
-      }
-      ctx.stroke();
-    }
-
-    const rangeEdge = projection.screenX(section, design.pad.minZ - design.gun.range);
-    ctx.strokeStyle = "rgba(95,178,255,0.25)";
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(Math.round(rangeEdge) + 0.5, 0);
-    ctx.lineTo(Math.round(rangeEdge) + 0.5, groundY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = Palette.textDim;
-    ctx.font = "10px ui-monospace, monospace";
-    ctx.fillText("gun range", rangeEdge + 4, 12);
   }
 }

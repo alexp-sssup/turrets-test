@@ -2,7 +2,6 @@ import { ActorPainter } from "./ActorPainter";
 import { DrawKind, DrawList } from "./DrawList";
 import { FrameCells } from "./FrameCells";
 import { DrawContext } from "./Layer";
-import { PeelPlane } from "./PeelPlane";
 import { VoxelFaces } from "./VoxelFaces";
 import { ViewYaw } from "./ViewYaw";
 import { VoxelPainter } from "./VoxelPainter";
@@ -16,9 +15,8 @@ import { VoxelPainter } from "./VoxelPainter";
  * the point: a runner is behind the wall they walk behind because the sort says so, not
  * because a layer was told to draw them earlier.
  *
- * Both projections come through here, so no layer branches on the mode (spec 10.1). The flat
- * dev view's depth key is simply "is this the reach plane", which reproduces its one
- * ordering rule -- the active section draws last so the ghosts stay behind it.
+ * There is one projection and one treatment, so nothing here branches (spec 10.1): a cell is
+ * drawn as the cube it is, or it is a hole where a block died, and the sort decides the rest.
  *
  * Nothing here allocates per cell: the list is typed arrays reused between frames, the
  * painters hold their own scratch, and the face fills are looked up rather than built.
@@ -37,11 +35,11 @@ export class FieldComposition {
     this.facingYaw = -1;
   }
 
-  public draw(context: DrawContext, peel: PeelPlane): void {
+  public draw(context: DrawContext): void {
     this.retarget(context);
-    this.build(context, peel);
+    this.build(context);
     this.list.sort();
-    this.paint(context, peel);
+    this.paint(context);
   }
 
   /** The painters are bound to a yaw's three camera-facing faces; rebuild on a turn. */
@@ -56,38 +54,33 @@ export class FieldComposition {
     this.facingYaw = yaw.id;
   }
 
-  private build(context: DrawContext, peel: PeelPlane): void {
+  private build(context: DrawContext): void {
     const frame = context.frame;
     const projection = context.projection;
     const blueprint = frame.design.blueprint;
-    const solid = new FrameCells(frame, peel, true);
+    const solid = new FrameCells(frame);
     const yaw = context.view.yaw;
-    const iso = projection.isIso;
     this.list.clear();
 
     for (let block = 0; block < blueprint.blockCount; block++) {
       const position = blueprint.blockAt(block).position;
       if (!frame.isAlive(block)) {
-        // A hole, and only in the reach plane: what the tester lost from the section they
-        // are reading.
-        if (position.x === context.view.slice) {
-          this.list.add(
-            DrawKind.Voxel,
-            block,
-            position.x,
-            position.y,
-            position.z,
-            projection.depthKey(position.x, position.y, position.z)
-          );
-        }
+        // A hole, wherever the block died. One behind a live wall is painted first and the
+        // wall is painted over it (no-sections spec 3).
+        this.list.add(
+          DrawKind.Voxel,
+          block,
+          position.x,
+          position.y,
+          position.z,
+          projection.depthKey(position.x, position.y, position.z)
+        );
         continue;
       }
-      if (iso && !peel.isPeeled(position.x)) {
-        // Spec 3.3: a cell behind its own three camera-facing neighbours is invisible, so
-        // fill cost follows the design's surface and not its volume.
-        if (VoxelFaces.isOccluded(solid, yaw, position.x, position.y, position.z)) {
-          continue;
-        }
+      // Spec 3.3: a cell behind its own three camera-facing neighbours is invisible, so
+      // fill cost follows the design's surface and not its volume.
+      if (VoxelFaces.isOccluded(solid, yaw, position.x, position.y, position.z)) {
+        continue;
       }
       if (!this.isOnScreen(context, position.x, position.y, position.z)) {
         continue;
@@ -131,9 +124,6 @@ export class FieldComposition {
   /** Cheap viewport reject: the hexagon of a cell that cannot be on the canvas (spec 8). */
   private isOnScreen(context: DrawContext, x: number, y: number, z: number): boolean {
     const projection = context.projection;
-    if (!projection.isIso) {
-      return true;
-    }
     const iso = projection.iso;
     const anchorX = iso.anchorX(x, z);
     const anchorY = iso.anchorY(x, y, z);
@@ -144,11 +134,9 @@ export class FieldComposition {
     return !(anchorY - 1.5 * scale > projection.heightPx || anchorY + scale < 0);
   }
 
-  private paint(context: DrawContext, peel: PeelPlane): void {
+  private paint(context: DrawContext): void {
     const frame = context.frame;
-    const blueprint = frame.design.blueprint;
-    const solid = new FrameCells(frame, peel, true);
-    const all = new FrameCells(frame, peel, false);
+    const solid = new FrameCells(frame);
     for (let position = 0; position < this.list.count; position++) {
       const slot = this.list.slotAt(position);
       const payload = this.list.payloadOf(slot);
@@ -161,24 +149,7 @@ export class FieldComposition {
             this.voxels.paintHole(context, x, y, z);
             break;
           }
-          const cue = peel.cueFor(x);
-          if (cue.wireframe) {
-            this.voxels.paintWireframe(
-              context,
-              all,
-              cue,
-              blueprint.blockAt(payload).kind,
-              x,
-              y,
-              z
-            );
-            break;
-          }
-          if (!cue.material) {
-            this.voxels.paintGhost(context, x, y, z);
-            break;
-          }
-          this.voxels.paintSolid(context, solid, cue, payload, x, y, z);
+          this.voxels.paintSolid(context, solid, payload, x, y, z);
           break;
         }
         case DrawKind.Shadow:

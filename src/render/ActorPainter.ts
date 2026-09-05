@@ -39,11 +39,15 @@ export class ActorPainter {
     const centreY = projection.screenY(x, level, z);
     ctx.fillStyle = Palette.shadow;
     ctx.beginPath();
-    if (projection.isIso) {
-      ctx.ellipse(centreX, centreY, radius * projection.scale * 1.414, radius * projection.scale * 0.707, 0, 0, Math.PI * 2);
-    } else {
-      ctx.ellipse(centreX, centreY, radius * projection.scale, radius * projection.scale * 0.35, 0, 0, Math.PI * 2);
-    }
+    ctx.ellipse(
+      centreX,
+      centreY,
+      radius * projection.scale * 1.414,
+      radius * projection.scale * 0.707,
+      0,
+      0,
+      Math.PI * 2
+    );
     ctx.fill();
   }
 
@@ -71,7 +75,7 @@ export class ActorPainter {
         this.quadX[corner] = context.projection.screenX(cx, cz);
         this.quadY[corner] = context.projection.screenY(cx, cy, cz);
       }
-      ctx.fillStyle = Palette.dimmed(baseHex, face.shade, 0);
+      ctx.fillStyle = Palette.shade(baseHex, face.shade);
       ctx.beginPath();
       ctx.moveTo(this.quadX[0], this.quadY[0]);
       for (let corner = 1; corner < VoxelFace.CORNER_COUNT; corner++) {

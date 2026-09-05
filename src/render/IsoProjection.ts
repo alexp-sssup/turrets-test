@@ -23,10 +23,7 @@ import { ViewYaw } from "./ViewYaw";
  *
  * * `onLevel` resolves a screen point in a **horizontal** plane, which is what the view ray
  *   of spec 5.2 is built from and what puts a click on the ground.
- * * `inSection` resolves it in a **vertical cross-section**, which is where the flat
- *   developer view of spec 9 still resolves a click (face-placement spec 2.7).
- *
- * Both are two divisions and no search, and both are exact left inverses of the pair above.
+ * `onLevel` is two divisions and no search, and is an exact left inverse of the pair above.
  */
 export class IsoProjection {
   public readonly yaw: ViewYaw;
@@ -124,22 +121,5 @@ export class IsoProjection {
     const p = (u + v) * 0.5;
     const r = (u - v) * 0.5;
     return new Vec3(this.yaw.worldX(p, r), level, this.yaw.worldZ(p, r));
-  }
-
-  /**
-   * Screen to world in the vertical cross-section `x = section` (face-placement spec 2.7).
-   *
-   * The same algebra with x known instead of y: the first screen term fixes z, and the
-   * second then fixes y. `zOfSx` is +/-1 at every yaw, so this never divides by zero and
-   * never loses precision.
-   */
-  public inSection(screenX: number, screenY: number, section: number): Vec3 {
-    const zOfSx = this.yaw.pOfZ + this.yaw.rOfZ;
-    const xOfSx = this.yaw.pOfX + this.yaw.rOfX;
-    const u = (screenX - this.originX) / this.scale;
-    const z = (u - xOfSx * section) / zOfSx;
-    const rise = (this.yaw.p(section, z) - this.yaw.r(section, z)) * this.halfHeight;
-    const y = (rise - (screenY - this.originY)) / this.scale;
-    return new Vec3(section, y, z);
   }
 }

@@ -153,32 +153,6 @@ describe("Telemetry", () => {
     assert.equal(second.yawChangedBeforeRun, false, "a camera turned only mid-run is sightseeing");
   });
 
-  /**
-   * Spec 11: the same keystroke means "let me reach in and build" on Design and "let me see
-   * why that failed" on Run, so pooling the two would answer neither question. And run
-   * seconds spent with a cutaway engaged is the field that would falsify spec 1: if testers
-   * choose the diagram over the game, the argument for this renderer is wrong.
-   */
-  it("counts peel moves per screen and charges run time spent cut away", () => {
-    const telemetry = new Telemetry("abc123");
-    const record = telemetry.beginAttempt(SampleBlueprints.standardTurret(), 93, 1, 0);
-
-    telemetry.notePeelMove();
-    telemetry.notePeelMove();
-    telemetry.notePeel(true, 1000);
-    telemetry.noteRunning(true, 4000); // three peeled seconds, but before the wave
-    telemetry.notePeelMove();
-    telemetry.notePeel(false, 7000); // three peeled seconds during it, then solid again
-    telemetry.finishAttempt(AttemptOutcome.Lost, null, 9000);
-
-    assert.equal(record.peelMovesInDesign, 2);
-    assert.equal(record.peelMovesInRun, 1);
-    assert.ok(
-      Math.abs(record.runSecondsWithPeel - 3) < 1e-9,
-      "only the seconds that were both running and peeled"
-    );
-  });
-
   /** Spec 11: a turret read at the floor rung is read with spec 3.2's detail already gone. */
   it("counts the zoom rungs visited and the seconds spent at the floor rung", () => {
     const telemetry = new Telemetry("abc123");

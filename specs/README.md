@@ -61,6 +61,11 @@ What is here so far:
   wall and build it back, and a first-person camera is the eventual answer. Supersedes §6 and
   §9 of the isometric renderer and §3 of the document above, and deletes §2.5 of the pointing
   document.
+- [`20260905-no-cross-sections-corrections.md`](20260905-no-cross-sections-corrections.md) —
+  what that removal actually reached. Corrects its supersession list (iso §9 is a controls
+  table and mostly stands; the bindings are not in §3.1 or iso §12), says which of iso §10's
+  must-not-regress items are withdrawn or amended, replaces an estimated line count with a
+  measured one, and drops the one test in its §5 that the project's own test rules forbid.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

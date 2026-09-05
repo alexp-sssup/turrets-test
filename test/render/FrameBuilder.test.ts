@@ -13,6 +13,14 @@ import { StationStatus } from "../../src/render/FieldFrame";
 import { FrameBuilder } from "../../src/render/FrameBuilder";
 import { PredictAnalysis } from "../../src/render/PredictAnalysis";
 import { Arena } from "../../src/sim/Arena";
+import { LiveInputQueue } from "../../src/sim/InputSource";
+import { RunLoop } from "../../src/sim/RunLoop";
+import { RunSimulation } from "../../src/sim/RunSimulation";
+import { ScriptedAttacker } from "../../src/sim/ScriptedAttacker";
+import { WaveScript } from "../../src/sim/WaveScript";
+import { CrewRole } from "../../src/crew/CrewMember";
+import { Blueprint } from "../../src/blueprint/Blueprint";
+import { WorkedExamples } from "../../src/data/WorkedExamples";
 import { BlockStructure } from "../../src/structure/BlockStructure";
 
 const dials = Dials.defaults();
@@ -22,6 +30,33 @@ const budget = new ConstantBudgetProvider(dials.materialBudget);
 
 function designFor(blueprint: ReturnType<typeof SampleBlueprints.standardTurret>): FieldDesign {
   return FieldDesign.withDefaults(blueprint, arena.pad, arena, dials);
+}
+
+/** A run at tick zero: the crew are assigned and nothing has moved yet. */
+function readyRun(blueprint: Blueprint): RunLoop {
+  const script = WaveScript.p0(arena.laneCentreX);
+  return RunSimulation.withDefaults(dials, arena).begin(
+    blueprint,
+    new ScriptedAttacker(script),
+    script,
+    new LiveInputQueue(),
+    20260905
+  );
+}
+
+/** Every design the build ships: the four fixtures and the three worked examples. */
+function shippedDesigns(): Blueprint[] {
+  const designs: Blueprint[] = [
+    SampleBlueprints.standardTurret(),
+    SampleBlueprints.buriedStationTurret(),
+    SampleBlueprints.severedDepotTurret(),
+    SampleBlueprints.overreachingTurret(),
+  ];
+  const examples = WorkedExamples.all();
+  for (let i = 0; i < examples.length; i++) {
+    designs.push(examples[i].blueprint);
+  }
+  return designs;
 }
 
 describe("FrameBuilder", () => {
@@ -76,6 +111,61 @@ describe("FrameBuilder", () => {
     );
     assert.equal(frame.stations.length, 1);
     assert.equal(frame.stations[0].status, StationStatus.NoPath);
+  });
+
+  it("draws no crew member inside a block except a gunner in their own station (crew-visible spec 3)", () => {
+    // Before this rule every one of the twelve was inside a live block on every shipped
+    // design, and the eleven with no post shared two to four cells between them.
+    const designs = shippedDesigns();
+    for (let d = 0; d < designs.length; d++) {
+      const blueprint = designs[d];
+      const loop = readyRun(blueprint);
+      const frame = new FrameBuilder(designFor(blueprint)).fromRun(loop);
+      assert.equal(frame.crew.length, dials.crewPool, blueprint.name + " flies the whole pool");
+      const seen = new Set<string>();
+      for (let i = 0; i < frame.crew.length; i++) {
+        const member = frame.crew[i];
+        const cell = new IVec3(Math.round(member.x), Math.round(member.y), Math.round(member.z));
+        const key = cell.x.toString() + "," + cell.y.toString() + "," + cell.z.toString();
+        assert.equal(seen.has(key), false, blueprint.name + ": one crew member to a cell");
+        seen.add(key);
+        const block = blueprint.indexAt(cell);
+        if (block < 0 || !loop.structure.isAlive(block)) {
+          continue;
+        }
+        // The one cell a crew member may share with a block: station-terminus spec 2.2 puts
+        // the gunner in the slit and crew-visible spec 3.4 keeps them there.
+        assert.equal(member.role, CrewRole.Gunner as number, blueprint.name + ": only a gunner");
+        assert.equal(
+          blueprint.blockAt(block).kind,
+          BlockKind.Station,
+          blueprint.name + ": and only in a station"
+        );
+      }
+    }
+  });
+
+  it("musters crew with no post on the ground behind the turret (crew-visible spec 3.3)", () => {
+    const blueprint = SampleBlueprints.standardTurret();
+    const loop = readyRun(blueprint);
+    const frame = new FrameBuilder(designFor(blueprint)).fromRun(loop);
+    const bounds = blueprint.bounds;
+    const backZ = bounds.min.z + bounds.size.z - 1 + 1;
+    let onTheGround = 0;
+    let backRow = 0;
+    for (let i = 0; i < frame.crew.length; i++) {
+      const member = frame.crew[i];
+      if (member.role === (CrewRole.Gunner as number)) {
+        continue;
+      }
+      assert.equal(member.y, arena.pad.level, "off duty is on the ground, not on the roof");
+      onTheGround++;
+      if (member.z === backZ) {
+        backRow++;
+      }
+    }
+    assert.ok(onTheGround > 0, "this design has crew to spare");
+    assert.ok(backRow > 0, "and the rank starts on the side away from the lane");
   });
 
   it("derives the arc percentage from the same ray walk the overlay draws", () => {

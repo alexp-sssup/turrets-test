@@ -505,6 +505,29 @@ export class RunLoop {
     return new AssignmentPlan(manned, details, runners);
   }
 
+  /**
+   * The allocation, applied before the run starts (crew-visible spec 2.3).
+   *
+   * The Allocate screen draws the run's own tick-zero frame, so the crew standing on it have
+   * to be the crew the plan being edited puts there. Refused once the clock is moving: from
+   * there on the split arrives as a logged `SetAllocation` on a tick like every other
+   * command, and a second path into it would be a command the replay never saw.
+   *
+   * Before the first tick there is no such risk. The screen queues the same command anyway
+   * when the wave starts, so this is a projection of a command the log will carry rather
+   * than a command of its own -- spec 4.5's replay re-drives from that log unchanged.
+   */
+  public previewAllocation(repairDetails: number, runners: number): boolean {
+    if (this.phaseValue !== RunPhase.Ready) {
+      return false;
+    }
+    this.requestedRepairDetails = repairDetails;
+    this.requestedRunners = runners;
+    this.allocationRequested = true;
+    this.assignCrew();
+    return true;
+  }
+
   private applyInputs(): void {
     const due = this.inputs.drain(this.time);
     for (let i = 0; i < due.length; i++) {

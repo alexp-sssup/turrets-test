@@ -28,6 +28,22 @@ export class FrameTimeline {
     this.frames.push(frame);
   }
 
+  /**
+   * Replaces the frame at the head of the timeline (crew-visible spec 2.3).
+   *
+   * The one case for it is the frame the Allocate screen is looking at: tick zero, captured
+   * before the run starts, re-derived when the allocation being edited changes. It is a
+   * *correction* of a frame nobody has watched yet rather than a new tick, so appending
+   * would put a second tick zero on a timeline the replay scrubs by index.
+   */
+  public replaceLast(frame: FieldFrame): void {
+    if (this.frames.length === 0) {
+      this.frames.push(frame);
+      return;
+    }
+    this.frames[this.frames.length - 1] = frame;
+  }
+
   /** Replaces the stored event log. Called as the run grows it. */
   public setEvents(events: readonly RunEvent[]): void {
     this.eventList = events;

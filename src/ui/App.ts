@@ -564,9 +564,14 @@ export class App implements SimTarget, FitTarget {
     this.repairDetails = repairDetails;
     this.runners = runners;
     const attempt = this.attempt;
-    if (attempt !== null) {
-      attempt.assign(repairDetails, runners);
+    if (attempt === null) {
+      return;
     }
+    attempt.assign(repairDetails, runners);
+    // Before the wave starts nothing is ticking, so the queued command would not reach the
+    // frame the tester is looking at until they had already committed to it. Crew-visible
+    // spec 2.3: the picture follows the plan while the plan is being edited.
+    attempt.previewAllocation(repairDetails, runners);
   }
 
   public focus(target: number): void {
@@ -584,6 +589,22 @@ export class App implements SimTarget, FitTarget {
   }
 
   /**
+   * Opens the Allocate screen on the design as it will be flown (crew-visible spec 2).
+   *
+   * The screen draws the attempt's tick-zero frame, so the attempt has to exist and has to
+   * be the one for the blueprint in the editor; and the plan already on the steppers has to
+   * be on the crew, or the tester's first sight of their allocation is somebody else's
+   * default.
+   */
+  private openAllocate(): void {
+    const attempt = this.prepareAttempt();
+    if (attempt !== null) {
+      attempt.previewAllocation(this.repairDetails, this.runners);
+    }
+    this.goTo(Screen.Allocate);
+  }
+
+  /**
    * "Begin the next wave", whichever wave that is.
    *
    * Three cases, and they are all the same command: the first wave of a fresh attempt, the
@@ -593,22 +614,11 @@ export class App implements SimTarget, FitTarget {
    * tester just fixed.
    */
   public startWave(): void {
-    let attempt = this.attempt;
-    const resuming = attempt !== null && attempt.started && !attempt.finished;
-    if (!resuming) {
-      // A pre-opened attempt is only good for the design it was opened with. The guided
-      // first run opens one before the tester has touched anything, and if they visit the
-      // editor first, that attempt is a stale copy of the blueprint they just changed.
-      const stale =
-        attempt === null || attempt.started || attempt.blueprint !== this.editor.blueprint();
-      if (stale) {
-        this.openAttempt();
-        attempt = this.attempt;
-      }
-    }
+    const attempt = this.prepareAttempt();
     if (attempt === null) {
       return;
     }
+    const resuming = attempt.started && !attempt.finished;
     attempt.assign(this.repairDetails, this.runners);
     this.noteDeviceAtWaveStart(attempt);
     if (resuming) {
@@ -631,6 +641,32 @@ export class App implements SimTarget, FitTarget {
   }
 
   // ---------------------------------------------------------------- attempts
+
+  /**
+   * The attempt the next wave will be flown on, opened when the one in hand cannot serve
+   * (crew-visible spec 2.2).
+   *
+   * Mid-run, between waves, the attempt in hand *is* the attempt and is handed straight
+   * back. Otherwise a pre-opened attempt is only good for the design it was opened with:
+   * the guided first run opens one before the tester has touched anything, and if they
+   * visit the editor first, that attempt is a stale copy of the blueprint they just
+   * changed.
+   *
+   * Both screens of the loop's second half ask for it. Run has always asked at start; the
+   * Allocate screen asks on the way in, because it draws the run's own tick-zero frame and
+   * a returning tester arrives there with no attempt open at all -- which is how the screen
+   * whose subject is the crew came to be showing none of them (spec 1.1).
+   */
+  private prepareAttempt(): AttemptSession | null {
+    const attempt = this.attempt;
+    if (attempt !== null && attempt.started && !attempt.finished) {
+      return attempt;
+    }
+    if (attempt === null || attempt.started || attempt.blueprint !== this.editor.blueprint()) {
+      this.openAttempt();
+    }
+    return this.attempt;
+  }
 
   /** Opens a fresh attempt on the design as it currently stands. */
   private openAttempt(): void {
@@ -1817,7 +1853,7 @@ export class App implements SimTarget, FitTarget {
       return;
     }
     if (action === "allocate") {
-      this.goTo(Screen.Allocate);
+      this.openAllocate();
       return;
     }
     if (action === "start") {

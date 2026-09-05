@@ -24,6 +24,7 @@ export { CellPoint, FrameBuilder } from "./FrameBuilder";
 export { FrameTimeline } from "./FrameTimeline";
 export { IsoProjection } from "./IsoProjection";
 export { DrawContext, Layer } from "./Layer";
+export { MusterGround } from "./MusterGround";
 export { Palette, UtilizationBand } from "./Palette";
 export { PeelPlane } from "./PeelPlane";
 export { PredictAnalysis, PredictOutcome } from "./PredictAnalysis";

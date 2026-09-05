@@ -245,6 +245,27 @@ export class AttemptSession {
     this.queue.push(InputKind.SetAllocation, repairDetails, runners);
   }
 
+  /**
+   * Applies an allocation now and re-derives the tick-zero frame (crew-visible spec 2.3).
+   *
+   * The Allocate screen draws that frame, so this is what makes the crew on the field move
+   * as the steppers move. A screen that shows a fixed default while the tester edits away
+   * from it is worse than one that shows nothing, because it looks right.
+   *
+   * Refused once the run has started, where reassignment is inter-wave only (spec 4.4) and
+   * arrives on a tick like every other command. Returns whether it applied.
+   */
+  public previewAllocation(repairDetails: number, runners: number): boolean {
+    if (!this.loop.previewAllocation(repairDetails, runners)) {
+      return false;
+    }
+    // A correction of the frame nobody has watched yet, not a second tick zero -- and it
+    // deliberately does not run `captureFrame`'s accumulators, which have already charged
+    // this tick once.
+    this.timeline.replaceLast(this.builder.fromRun(this.loop));
+    return true;
+  }
+
   public get focusedTarget(): number {
     return this.loop.focusedTarget;
   }

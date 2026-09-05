@@ -10,6 +10,7 @@ import { RunLoop, RunPhase } from "../sim/RunLoop";
 import { BlockStructure } from "../structure/BlockStructure";
 import { StructuralReport, StructuralStatus } from "../structure/StructuralReport";
 import { FieldDesign } from "./FieldDesign";
+import { MusterGround } from "./MusterGround";
 import {
   AttackerSnapshot,
   CrewSnapshot,
@@ -30,11 +31,19 @@ import {
  */
 export class FrameBuilder {
   private readonly design: FieldDesign;
+  private readonly muster: MusterGround;
   private lastJointField: JointField;
   private lastJointStamp: number;
 
   public constructor(design: FieldDesign) {
     this.design = design;
+    // The design's footprint does not change under a builder, so the ground crew fall in on
+    // is worked out once rather than per frame (crew-visible spec 3.2).
+    this.muster = new MusterGround(
+      design.blueprint.bounds,
+      design.pad.level,
+      design.dials.crewPool
+    );
     this.lastJointField = JointField.empty();
     this.lastJointStamp = -1;
   }
@@ -328,7 +337,6 @@ export class FrameBuilder {
   private crewOf(loop: RunLoop): CrewSnapshot[] {
     const snapshots: CrewSnapshot[] = [];
     const structure = loop.structure;
-    const parkAt = FrameBuilder.parkingCell(structure);
     let parked = 0;
     for (let id = 0; id < loop.crew.size; id++) {
       const member = loop.crew.memberAt(id);
@@ -366,19 +374,13 @@ export class FrameBuilder {
         );
         continue;
       }
-      // Repair details, spare runners and the unassigned wait by the hatch. They are not
-      // simulated as walkers, so showing them anywhere more specific would be a lie.
+      // Repair details, spare runners and the unassigned muster on open ground behind the
+      // turret, one to a cell (crew-visible spec 3). They are not simulated as walkers, so
+      // where they stand is a convention -- and the convention has to keep twelve crew
+      // readable as twelve rather than as one box inside the hatch.
+      const stand = this.muster.cellAt(parked);
       snapshots.push(
-        new CrewSnapshot(
-          id,
-          member.role as number,
-          parkAt.x,
-          parkAt.y + 0.05 * (parked % 3),
-          parkAt.z + 0.28 * (parked % 4) - 0.4,
-          -1,
-          false,
-          -1
-        )
+        new CrewSnapshot(id, member.role as number, stand.x, stand.y, stand.z, -1, false, -1)
       );
       parked++;
     }
@@ -480,16 +482,6 @@ export class FrameBuilder {
     }
     const position = structure.positionOf(station);
     return new CellPoint(position.x, position.y, position.z);
-  }
-
-  private static parkingCell(structure: BlockStructure): CellPoint {
-    const hatches = structure.aliveOfKind(BlockKind.Hatch);
-    if (hatches.length > 0) {
-      const position = structure.positionOf(hatches[0]);
-      return new CellPoint(position.x, position.y, position.z);
-    }
-    const bounds = structure.blueprint.bounds;
-    return new CellPoint(bounds.min.x, bounds.min.y, bounds.min.z);
   }
 
   /** Chebyshev distance to the nearest other depot, or Infinity when it stands alone. */

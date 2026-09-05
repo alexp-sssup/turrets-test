@@ -1,6 +1,7 @@
 import { AMMO_LOAD_COUNT, AmmoLoadId, AmmoTable } from "../materials/AmmoTable";
 import { CrewRole, crewRoleName } from "../crew/CrewMember";
 import { FieldFrame, StationStatus, isLoudStatus, stationStatusName } from "../render/FieldFrame";
+import { Palette } from "../render/Palette";
 import { RunEvent, RunEventKind, runEventKindName } from "../sim/RunEvent";
 import { RunOutcome, runOutcomeName } from "../sim/RunResult";
 import { AttemptRecord } from "../telemetry/AttemptRecord";
@@ -201,7 +202,7 @@ export class RunPanels {
       '<section class="panel" data-group="crew"><h2>crew</h2><table class="kv">' +
       RunPanels.row("alive", frame.crewAlive.toString());
     for (let role = 1; role <= 3; role++) {
-      html += RunPanels.row(crewRoleName(role as CrewRole), crewCounts[role].toString());
+      html += RunPanels.markupRow(RunPanels.roleKey(role as CrewRole), crewCounts[role].toString());
     }
     let carrying = 0;
     for (let i = 0; i < frame.crew.length; i++) {
@@ -438,6 +439,26 @@ export class RunPanels {
     return "<tr><th>" + Dom.escape(label) + "</th><td>" + value + "</td></tr>";
   }
 
+  /** As `row`, for a label that is already markup -- the role key's swatch (spec 4.2). */
+  private static markupRow(label: string, value: string): string {
+    return "<tr><th>" + label + "</th><td>" + value + "</td></tr>";
+  }
+
+  /**
+   * A role's name behind its own swatch (crew-visible spec 4.2).
+   *
+   * The key rides on the row that counts the role rather than sitting in a corner of the
+   * screen: a key you have to go and find is a lookup, and the colour on the field is the
+   * same colour, straight out of `Palette`, rather than an approximation of it.
+   */
+  private static roleKey(role: CrewRole): string {
+    return RunPanels.swatch(Palette.crewHex(role as number)) + Dom.escape(crewRoleName(role));
+  }
+
+  private static swatch(hex: string): string {
+    return '<span class="swatch role" style="background:' + hex + '"></span>';
+  }
+
   /** The Allocate screen (UI spec 3): gunners, repair details and runners out of one pool. */
   public static allocate(
     crewPool: number,
@@ -458,12 +479,12 @@ export class RunPanels {
       '<p class="hint">one fixed pool for the whole run. no growth, no replacements. crew ' +
       "inside a collapsing section die and do not come back.</p>" +
       '<table class="kv">' +
-      RunPanels.row(
-        "gunners",
+      RunPanels.markupRow(
+        RunPanels.roleKey(CrewRole.Gunner) + "s",
         forGunners.toString() + " (one per station, " + stationCount.toString() + " stations)"
       ) +
-      RunPanels.row(
-        "repair details",
+      RunPanels.markupRow(
+        RunPanels.roleKey(CrewRole.Repair) + " details",
         '<span class="stepper"><button class="small" data-action="repair-down">−</button>' +
           repairDetails.toString() +
           '<button class="small" data-action="repair-up">+</button></span> × ' +
@@ -471,17 +492,19 @@ export class RunPanels {
           " = " +
           forRepair.toString()
       ) +
-      RunPanels.row(
-        "runners",
+      RunPanels.markupRow(
+        RunPanels.roleKey(CrewRole.Runner) + "s",
         '<span class="stepper"><button class="small" data-action="runners-down">−</button>' +
           runners.toString() +
           '<button class="small" data-action="runners-up">+</button></span>'
       ) +
-      RunPanels.row(
-        "unassigned",
+      RunPanels.markupRow(
+        RunPanels.roleKey(CrewRole.Idle) + " (unassigned)",
         '<span class="' + (spare < 0 ? "bad" : "") + '">' + spare.toString() + "</span>"
       ) +
       "</table>" +
+      '<p class="hint">the swatches are the boxes on the field: crew off duty fall in on the ' +
+      "ground behind the turret, one to a cell.</p>" +
       '<p class="hint">a station with no spare runner sends its own gunner for ammunition, ' +
       "and the gun is silent for the whole round trip. that is the baseline penalty.</p>" +
       '<div class="button-row"><button data-action="' +

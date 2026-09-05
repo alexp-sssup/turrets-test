@@ -39,11 +39,14 @@ What is here so far:
   eraser address the block under the pointer. Restores §5.2 of the isometric renderer spec
   on the Design screen and carves the eraser out of its §5.3; placement stays plane-locked.
 - [`20260904-gun-ports.md`](20260904-gun-ports.md) — a station is a firing slit and its
-  gunner stands in it. Adds a second passable kind beside the hatch, deletes the
-  `StationNoCrewSpace` violation, and corrects a round-trip pair quoted in the hatches spec.
+  gunner stands in it. Deletes the `StationNoCrewSpace` violation and corrects a round-trip
+  pair quoted in the hatches spec. Its §2.1 and §2.6 are superseded by the document below.
 - [`20260904-palette-material.md`](20260904-palette-material.md) — the palette says which
   material it authors. Writes down the P0 restriction that a station, a depot and a hatch
   are wood, and amends the palette sentence of §3.1 of the UI spec to name it.
+- [`20260905-station-terminus.md`](20260905-station-terminus.md) — a slit is not a doorway.
+  Crew stand in a station and no route passes through one, so a gun port in the ground-floor
+  wall stops being a way in. Supersedes §2.1 and §2.6 of the gun-ports document above.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat

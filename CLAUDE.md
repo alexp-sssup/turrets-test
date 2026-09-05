@@ -36,6 +36,26 @@ The specs come first and the code follows. **All specs live in `specs/`.** Befor
 changing behaviour, read the spec section that governs it; if the spec and the code
 disagree, the spec wins and the code is the bug.
 
+**A spec is amended forward, never edited in place.** A rule that turns out to be wrong is
+superseded by a *new* dated document, not by a rewrite of the one that carried it. The
+directory is a history: it has to keep reading as the order the thinking went in, and a
+reader who follows a `spec 4.5` citation out of the code needs the paragraph that code was
+written against rather than a later opinion of it. So changing a rule is two commits, in
+this order:
+
+1. **The follow-up document**, `specs/YYYYMMDD-<subject>.md`, on its own. It opens by
+   naming exactly what it supersedes or amends and what it leaves standing, gives the
+   legend for its cross-references, says what code and tests should cite it as, argues why
+   the old rule was wrong -- with the measurement, where there is one -- and ends with the
+   tests it requires. Link it from `specs/README.md` in the same commit.
+2. **The code that implements it**, citing the new document's section numbers.
+
+Edit an existing spec in place only for a typo, a broken link, or the tail of a rename.
+Never to change what it says. The supersedes line at the top of the newer document is what
+tells a reader which rule is live and what replaced the one it replaced; a silent rewrite
+leaves them nothing to read that from, and quietly falsifies every citation already
+pointing at the old wording.
+
 - **Name every file in `specs/` `YYYYMMDD-<subject>.md`** -- the date the document
   was first written, then its subject (`20260903-mobile-ui.md`). The prefix is how
   a later reader sees the order the specs evolved in, so use the date of writing
@@ -47,7 +67,6 @@ disagree, the spec wins and the code is the bug.
   serves, so keep those references accurate when specs are renumbered.
 - If a task needs behaviour no spec covers, say so and propose the spec wording
   rather than inventing the rule silently in code.
-- Land a spec change as its own commit, ahead of the code implementing it.
 - `specs/` is the only place a spec lives. The stale copies of the P0 prototype and
   tester-build specs that `docs/` used to carry beside them have been deleted, so
   never re-add a spec there or leave a second copy of one behind: a reader who finds

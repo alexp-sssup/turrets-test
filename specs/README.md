@@ -47,6 +47,10 @@ What is here so far:
 - [`20260905-station-terminus.md`](20260905-station-terminus.md) — a slit is not a doorway.
   Crew stand in a station and no route passes through one, so a gun port in the ground-floor
   wall stops being a way in. Supersedes §2.1 and §2.6 of the gun-ports document above.
+- [`20260905-crew-are-visible.md`](20260905-crew-are-visible.md) — the twelve can be seen,
+  counted and told apart. The Allocate screen draws the crew it is allocating, crew with no
+  post muster one to a cell on the ground, and the role colours are named and keyed. Amends §3
+  of the UI spec and §7.4 of the isometric renderer.
 
 `structural-solver.md` still lives in [`../docs/`](../docs) and has not been migrated yet;
 it will be moved or superseded here. The duplicate copies of the two P0 specs that sat
